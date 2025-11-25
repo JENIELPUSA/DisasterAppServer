@@ -12,7 +12,13 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "android": {
+    "buildType": "apk"
+  },
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://disasterappserver.onrender.com"
+      }
     }
   },
   "submit": {
