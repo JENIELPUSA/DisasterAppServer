@@ -5,8 +5,7 @@ const initDefaultUser = async () => {
 
   if (userCount === 0) {
     const defaultAdmin = new UserLogin({
-      first_name: process.env.DEFAULT_ADMIN_FIRSTNAME || "Admin",
-      last_name: process.env.DEFAULT_ADMIN_LASTNAME || "User",
+      fullName: process.env.DEFAULT_ADMIN_FULLNAME || "Admin",
       username: process.env.DEFAULT_ADMIN_EMAIL,
       password: process.env.DEFAULT_ADMIN_PASSWORD,
       confirmPassword: process.env.DEFAULT_ADMIN_PASSWORD,

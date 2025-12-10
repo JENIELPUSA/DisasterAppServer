@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+      body, html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+      }
+      #map {
+        width: 100%;
+        height: 100%;
+      }
+      .legend {
+        position: absolute;
+        top: 80px;
+        right: 0;
+        background: white;
+        padding: 8px 10px;
+        border-radius: 6px 0 0 6px;
+        box-shadow: -2px 0 6px rgba(0,0,0,0.15);
+        z-index: 1000;
+        font-family: Arial, sans-serif;
+        font-size: 11px;
+        transition: opacity 0.3s ease;
+        border-left: 2px solid #f0f0f0;
+        max-width: 140px;
+        line-height: 1.3;
+      }
+      .legend-header {
+        font-weight: bold;
+        margin-bottom: 6px;
+        text-align: left;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #eee;
+      }
+      .legend-items {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+      }
+      .legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 6px;
+        border: 1px solid white;
+        flex-shrink: 0;
+      }
+      .legend-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 4px;
+      }
+      .full { background-color: #ef4444; }
+      .high { background-color: #f97316; }
+      .available { background-color: #10b981; }
+      .unknown { background-color: #6b7280; }
+      .municipal { background-color: #3b82f6; }
+      
+      /* Animation for markers */
+      .municipality-marker {
+        transition: transform 0.3s ease;
+      }
+      .evacuation-marker {
+        transition: transform 0.3s ease;
+      }
+      .marker-pulse {
+        animation: pulse 2s infinite;
+      }
+      
+      @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+      }
+      
+      /* Responsive adjustments */
+      @media (max-width: 768px) {
+        .legend {
+          top: 70px;
+          max-width: 130px;
+          font-size: 10px;
+          padding: 6px 8px;
+        }
+        .legend-color {
+          width: 10px;
+          height: 10px;
+          margin-right: 5px;
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .legend {
+          top: 60px;
+          max-width: 120px;
+          font-size: 9px;
+          padding: 5px 7px;
+        }
+        .legend-color {
+          width: 9px;
+          height: 9px;
+          margin-right: 4px;
+        }
+      }
+      
+      /* Hover effect for legend */
+      .legend:hover {
+        box-shadow: -2px 0 8px rgba(0,0,0,0.2);
+        border-left: 2px solid #3b82f6;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <script>
+      let map;
+      let currentMarkers = [];
+      let currentView = "municipalities";
+
+      // Function to clear all markers from the map
+      function clearMarkers() {
+        currentMarkers.forEach(marker => {
+          map.removeLayer(marker);
+        });
+        currentMarkers = [];
+      }
+
+      // Function to add municipality/barangay markers
+      function addMunicipalityMarkers(municipalities) {
+        clearMarkers();
+        
+        municipalities.forEach((item, index) => {
+          if (!item.coordinates?.latitude || !item.coordinates?.longitude) return;
+
+          const lat = item.coordinates.latitude;
+          const lng = item.coordinates.longitude;
+
+          // Create custom icon for municipalities
+          const municipalityIcon = L.divIcon({
+            className: 'municipality-marker',
+            html: `<div style="
+              background-color: #3b82f6;
+              width: 20px;
+              height: 20px;
+              border-radius: 50%;
+              border: 3px solid white;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              transition: transform 0.3s ease;
+            ">
+              <span style="color: white; font-size: 10px; font-weight: bold;">${index + 1}</span>
+            </div>`,
+            iconSize: [26, 26]
+          });
+
+          const marker = L.marker([lat, lng], { icon: municipalityIcon }).addTo(map);
+          currentMarkers.push(marker);
+
+          // Popup content
+          let popupContent = `<b>${item.barangayName || "Unnamed Barangay"}</b><br/>`;
+          if (item.fullAddress) {
+            popupContent += `<small>${item.fullAddress}</small><br/>`;
+          }
+          if (item.municipality) {
+            popupContent += `<small>Municipality: ${item.municipality}</small>`;
+          }
+
+          marker.bindPopup(popupContent);
+
+          // Auto zoom to marker on click
+          marker.on("click", () => {
+            map.flyTo([lat, lng], 17, {
+              animate: true,
+              duration: 1.5,
+            });
+          });
+        });
+        
+        // Fit bounds to show all markers
+        if (municipalities.length > 0) {
+          const bounds = L.latLngBounds(
+            municipalities
+              .filter(item => item.coordinates?.latitude && item.coordinates?.longitude)
+              .map(item => [item.coordinates.latitude, item.coordinates.longitude])
+          );
+          map.fitBounds(bounds.pad(0.1));
+        }
+      }
+
+      // Function to add evacuation center markers
+      function addEvacuationMarkers(evacuations) {
+        clearMarkers();
+        
+        evacuations.forEach((item, index) => {
+          if (!item.location?.latitude || !item.location?.longitude) return;
+
+          const lat = item.location.latitude;
+          const lng = item.location.longitude;
+
+          // Get status color
+          let statusColor = '#6b7280'; // default gray
+          let statusClass = 'unknown';
+          if (item.status) {
+            switch(item.status.toLowerCase()) {
+              case 'full': statusColor = '#ef4444'; statusClass = 'full'; break;
+              case 'high': statusColor = '#f97316'; statusClass = 'high'; break;
+              case 'available': statusColor = '#10b981'; statusClass = 'available'; break;
+            }
+          }
+
+          // Create custom icon for evacuation centers
+          const evacuationIcon = L.divIcon({
+            className: 'evacuation-marker',
+            html: `<div style="
+              background-color: ${statusColor};
+              width: ${item.status === 'Full' ? '30px' : '24px'};
+              height: ${item.status === 'Full' ? '30px' : '24px'};
+              border-radius: 50%;
+              border: 3px solid white;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              transition: transform 0.3s ease;
+            ">
+              <span style="color: white; font-size: ${item.status === 'Full' ? '12px' : '10px'}; font-weight: bold;">${index + 1}</span>
+            </div>`,
+            iconSize: item.status === 'Full' ? [36, 36] : [30, 30]
+          });
+
+          const marker = L.marker([lat, lng], { icon: evacuationIcon }).addTo(map);
+          currentMarkers.push(marker);
+
+          // Prepare popup content
+          let popupContent = `<b>${item.evacuationName || "Evacuation Center"}</b><br/>`;
+          
+          // Add status with colored indicator
+          if (item.status) {
+            popupContent += `<div style="display: flex; align-items: center; margin: 5px 0;">
+              <span class="status-indicator ${statusClass}"></span>
+              <b>Status:</b> ${item.status}
+            </div>`;
+          }
+          
+          if (item.evacuationCapacity) {
+            popupContent += `<b>Capacity:</b> ${item.currentEvacuation || 0}/${item.evacuationCapacity}<br/>`;
+          }
+          
+          if (item.availableCapacity) {
+            popupContent += `<b>Available:</b> ${item.availableCapacity} spots<br/>`;
+          }
+          
+          if (item.contactPerson?.name) {
+            popupContent += `<b>Contact:</b> ${item.contactPerson.name}<br/>`;
+            if (item.contactPerson.contactNumber) {
+              popupContent += `<small>${item.contactPerson.contactNumber}</small>`;
+            }
+          }
+
+          marker.bindPopup(popupContent);
+
+          // Add circle showing capacity radius (if available)
+          if (item.evacuationCapacity) {
+            const radius = item.evacuationCapacity * 0.5; // Adjust multiplier as needed
+            L.circle([lat, lng], {
+              color: statusColor,
+              fillColor: statusColor,
+              fillOpacity: 0.1,
+              radius: radius
+            }).addTo(map);
+          }
+
+          // Auto zoom to marker on click
+          marker.on("click", () => {
+            map.flyTo([lat, lng], 16, {
+              animate: true,
+              duration: 1.5,
+            });
+          });
+        });
+        
+        // Fit bounds to show all evacuation centers
+        if (evacuations.length > 0) {
+          const bounds = L.latLngBounds(
+            evacuations
+              .filter(item => item.location?.latitude && item.location?.longitude)
+              .map(item => [item.location.latitude, item.location.longitude])
+          );
+          map.fitBounds(bounds.pad(0.1));
+        }
+      }
+
+      // Function to update legend based on current view
+      function updateLegend() {
+        const legend = document.getElementById('legend');
+        if (!legend) return;
+        
+        if (currentView === "municipalities") {
+          legend.innerHTML = `
+            <div class="legend-header" style="color: #3b82f6;">Municipalities</div>
+            <div class="legend-items">
+              <div class="legend-item">
+                <div class="legend-color" style="background-color: #3b82f6;"></div>
+                <div class="legend-text">Municipality</div>
+              </div>
+            </div>
+          `;
+        } else {
+          legend.innerHTML = `
+            <div class="legend-header" style="color: #f97316;">Evacuation Centers</div>
+            <div class="legend-items">
+              <div class="legend-item">
+                <div class="legend-color" style="background-color: #10b981;"></div>
+                <div class="legend-text">Available</div>
+              </div>
+              <div class="legend-item">
+                <div class="legend-color" style="background-color: #f97316;"></div>
+                <div class="legend-text">High</div>
+              </div>
+              <div class="legend-item">
+                <div class="legend-color" style="background-color: #ef4444;"></div>
+                <div class="legend-text">Full</div>
+              </div>
+              <div class="legend-item">
+                <div class="legend-color" style="background-color: #6b7280;"></div>
+                <div class="legend-text">Unknown</div>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      // Initialize the map
+      if (!map) {
+        map = L.map("map").setView([11.6, 124.45], 11);
+
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        // Create legend container
+        const legendContainer = document.createElement('div');
+        legendContainer.id = 'legend';
+        legendContainer.className = 'legend';
+        document.body.appendChild(legendContainer);
+        
+        // Initialize legend content
+        updateLegend();
+      }
+
+      // Listen for messages from React Native
+      document.addEventListener("message", function (event) {
+        try {
+          const data = JSON.parse(event.data);
+          currentView = data.view || "municipalities";
+          
+          if (currentView === "municipalities" && data.municipalities) {
+            addMunicipalityMarkers(data.municipalities);
+          } else if (currentView === "evacuations" && data.evacuations) {
+            addEvacuationMarkers(data.evacuations);
+          }
+          
+          // Update legend
+          updateLegend();
+          
+        } catch (error) {
+          console.error("Error parsing data:", error);
+        }
+      });
+    </script>
+  </body>
+</html>

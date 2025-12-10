@@ -1,5 +1,12 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
+import React, {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+  useCallback,
+} from "react";
 import axios from "axios";
+import Constants from "expo-constants";
 import { AuthContext } from "../AuthContext";
 
 export const BarangayDisplayContext = createContext();
@@ -14,48 +21,60 @@ export const BarangayDisplayProvider = ({ children }) => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const limit = 10;
+  const backendUrl = Constants.expoConfig.extra.apiUrl; // Expo environment variable
 
   // -----------------------------
   // Centralized error handler
   // -----------------------------
   const handleError = (error) => {
-    setCustomError(error.response?.data?.message || error.message || "Something went wrong.");
-    setModalStatus("failed");
-    setShowModal(true);
+    console.error(error);
+    // optionally show a modal or toast here
   };
 
   // -----------------------------
   // Fetch barangays with filters
   // -----------------------------
-  const fetchBarangays = useCallback(async (page = 1) => {
-    if (!authToken) return;
-    try {
-      setLoading(true);
+  const fetchBarangays = useCallback(
+    async (search = "", page = 1) => {
+      if (!authToken) return;
 
-      const params = { page, limit };
-      if (search.trim()) params.search = search.trim();
-      if (dateFrom.trim()) params.dateFrom = dateFrom.trim();
-      if (dateTo.trim()) params.dateTo = dateTo.trim();
+      try {
+        setLoading(true);
 
-      const res = await axios.get(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/api/v1/Barangay`, {
-        params,
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+       const searchText = (search ?? "").toString().trim();
 
-      const { data, totalItems, currentPage: resCurrentPage, totalPages: resTotalPages } = res.data;
 
-      setBarangays(data || []);
-      setTotalBarangays(totalItems || 0);
-      setCurrentPage(resCurrentPage || page);
-      setTotalPages(resTotalPages || 1);
-    } catch (error) {
-      handleError(error);
-    } finally {
-      setLoading(false);
-    }
-  }, [authToken, search, dateFrom, dateTo]);
+        const params = {};
+        if (searchText) params.search = searchText;
+        if (page) params.page = page;
+
+        const res = await axios.get(`${backendUrl}/api/v1/Barangay`, {
+          params,
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Cache-Control": "no-cache", // prevent 304
+          },
+        });
+
+        const {
+          data,
+          totalItems,
+          currentPage: resCurrentPage,
+          totalPages: resTotalPages,
+        } = res.data;
+
+        setBarangays(data || []);
+        setTotalBarangays(totalItems || 0);
+        setCurrentPage(resCurrentPage || page);
+        setTotalPages(resTotalPages || 1);
+      } catch (error) {
+        handleError(error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authToken] // only depend on authToken
+  );
 
   // -----------------------------
   // Debounce search/filter changes
@@ -68,26 +87,32 @@ export const BarangayDisplayProvider = ({ children }) => {
     return () => clearTimeout(timeout);
   }, [search, dateFrom, dateTo, fetchBarangays]);
 
-  // -----------------------------
-  // Add barangay
-  // -----------------------------
   const addBarangay = async (values) => {
     try {
-      const res = await axios.post(
-        `${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/api/v1/Barangay`,
-        values,
-        { headers: { Authorization: `Bearer ${authToken}` } }
-      );
+      const res = await axios.post(`${backendUrl}/api/v1/Barangay`, values, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
 
       if (res.data.status === "success") {
-        fetchBarangays(currentPage);
+        fetchBarangays(currentPage); // refresh list
         return { success: true, data: res.data.data };
       } else {
-        throw new Error(res.data.message || "Failed to add barangay");
+        return {
+          success: false,
+          error: res.data.message || "Failed to add barangay",
+        };
       }
     } catch (error) {
-      handleError(error);
-      return { success: false, error: error.message };
+      // Axios error handling
+      const serverMessage = error.response?.data?.message;
+      const statusCode = error.response?.status;
+
+      console.error("Axios Error:", statusCode, serverMessage || error.message);
+
+      return {
+        success: false,
+        error: serverMessage || error.message || "Something went wrong",
+      };
     }
   };
 
@@ -96,7 +121,7 @@ export const BarangayDisplayProvider = ({ children }) => {
   // -----------------------------
   const deleteBarangay = async (id) => {
     try {
-      const res = await axios.delete(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/api/v1/Barangay/${id}`, {
+      const res = await axios.delete(`${backendUrl}/api/v1/Barangay/${id}`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
 
@@ -118,9 +143,11 @@ export const BarangayDisplayProvider = ({ children }) => {
   const updateBarangay = async (id, values) => {
     try {
       const res = await axios.patch(
-        `${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/api/v1/Barangay/${id}`,
+        `${backendUrl}/api/v1/Barangay/${id}`,
         values,
-        { headers: { Authorization: `Bearer ${authToken}` } }
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
       );
 
       if (res.data.status === "success") {
@@ -141,9 +168,11 @@ export const BarangayDisplayProvider = ({ children }) => {
   const toggleBarangayStatus = async (id) => {
     try {
       const res = await axios.patch(
-        `${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/api/v1/Barangay/toggle/${id}`,
+        `${backendUrl}/api/v1/Barangay/toggle/${id}`,
         {},
-        { headers: { Authorization: `Bearer ${authToken}` } }
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
       );
 
       if (res.data.status === "success") {
@@ -163,7 +192,7 @@ export const BarangayDisplayProvider = ({ children }) => {
   // -----------------------------
   const getBarangay = async (id) => {
     try {
-      const res = await axios.get(`${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/api/v1/Barangay/${id}`, {
+      const res = await axios.get(`${backendUrl}/api/v1/Barangay/${id}`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       return res.data.data;
@@ -196,7 +225,6 @@ export const BarangayDisplayProvider = ({ children }) => {
       }}
     >
       {children}
-
     </BarangayDisplayContext.Provider>
   );
 };

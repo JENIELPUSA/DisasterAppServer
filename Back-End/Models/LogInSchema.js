@@ -3,52 +3,69 @@ const validator = require("validator");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { type } = require("os");
-
 const UserLoginSchema = new mongoose.Schema({
-  avatar: { type: String },
-  first_name: { type: String },
-  last_name: { type: String },
-  contact_number: { type: Number },
-  username: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  // Personal Information
+  fullName: {
+    type: String,
+    required: [true, 'Full name is required'],
+    trim: true
+  },
+  username: {
+    type: String,
+    required: [true, 'Email is required'],
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
+  password: {
+    type: String,
+    required: [true, 'Password is required'],
+    minlength: 6
+  },
+  contactNumber: {
+    type: String,
+  },
+  address: {
+    type: String
+  },
+  
+  // Role Information
   role: {
     type: String,
-    enum: ["admin", "organizer","staff","lgu"],
-    required: true,
-    lowercase: true,
+    enum: ['rescuer', 'household_lead', 'brgy_captain', 'household_member','admin'],
+    required: [true, 'Role is required']
   },
-
-  otp: { type: String },
-  otpExpiresAt: { type: Date },
-  isVerified: { type: Boolean, default: false },
-
-  linkedId: {
-    type: mongoose.Schema.Types.ObjectId,
-    refPath: "role",
-  },
-
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-
-  confirmPassword: {
+  
+  // Common Fields
+  barangay: {
     type: String,
-    require: [true, "Please confirm your password"],
-    validate: {
-      validator: function (val) {
-        return (val = this.password);
-      },
-      message: "Password & confirm Pasword does not match",
-    },
+    required: function() {
+      // Barangay is required for certain roles
+      return ['household_lead', 'brgy_captain'].includes(this.role);
+    }
   },
-  theme: {
-    type: String,
-    enum: ["light", "dark"],
-    default: "light",
+  
+  // Status
+  isActive: {
+    type: Boolean,
+    default: true
   },
-  passwordChangedAt: Date,
-  passwordResetToken: String,
-  passwordResetTokenExpires: Date,
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Timestamps
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
 });
+
 // Mongoose pre-save middleware to hash the password and remove confirmPassword
 UserLoginSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();

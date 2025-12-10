@@ -306,3 +306,5 @@ exports.getCurrentMayorProfile = AsyncErrorHandler(async (req, res) => {
   }
 });
 
+
+

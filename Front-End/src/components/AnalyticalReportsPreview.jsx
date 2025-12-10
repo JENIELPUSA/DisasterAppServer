@@ -165,7 +165,7 @@ const AnalyticalReportsPreview = ({
         </View>
 
         <TouchableOpacity
-          className="bg-blue-600 py-3 rounded-xl mt-4"
+          className="bg-cyan-600  py-3 rounded-xl mt-4"
           onPress={() => setAnalyticalReportsModalVisible(true)}
         >
           <Text className="text-white text-center font-semibold">

@@ -1,18 +1,10 @@
 const Barangay = require("../Models/Barangay");
 const AsyncErrorHandler = require("../Utils/AsyncErrorHandler");
-
-// Create Barangay
 exports.createBarangay = AsyncErrorHandler(async (req, res) => {
-  const { name, city, coordinates } = req.body;
+  const { barangayName, municipality, coordinates, fullAddress } = req.body;
 
-  if (!name || !city || !coordinates?.lat || !coordinates?.lng) {
-    return res.status(400).json({
-      status: "fail",
-      message: "Name, city, and coordinates are required.",
-    });
-  }
-
-  const existing = await Barangay.findOne({ name });
+  // Check if barangay already exists
+  const existing = await Barangay.findOne({ barangayName });
   if (existing) {
     return res.status(400).json({
       status: "fail",
@@ -20,7 +12,12 @@ exports.createBarangay = AsyncErrorHandler(async (req, res) => {
     });
   }
 
-  const barangay = await Barangay.create(req.body);
+  const barangay = await Barangay.create({
+    barangayName,
+    municipality,
+    coordinates,
+    fullAddress,
+  });
 
   res.status(201).json({
     status: "success",
@@ -32,13 +29,13 @@ exports.createBarangay = AsyncErrorHandler(async (req, res) => {
 // Get all Barangays with pagination & search
 exports.displayBarangays = AsyncErrorHandler(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
+  const limit = parseInt(req.query.limit) || 200;
   const skip = (page - 1) * limit;
 
   const { search = "", city } = req.query;
 
   const matchStage = {};
-  if (search.trim()) matchStage.name = { $regex: new RegExp(search.trim(), "i") };
+  if (search.trim()) matchStage.barangayName = { $regex: new RegExp(search.trim(), "i") }; // <-- use barangayName
   if (city) matchStage.city = city;
 
   const pipeline = [
@@ -84,9 +81,13 @@ exports.displayOneBarangay = AsyncErrorHandler(async (req, res) => {
 });
 
 // Update Barangay
+// Update Barangay
 exports.updateBarangay = AsyncErrorHandler(async (req, res) => {
   const id = req.params.id;
 
+  console.log("Data Pass", req.body);
+
+  // Find barangay by ID
   const barangay = await Barangay.findById(id);
   if (!barangay) {
     return res.status(404).json({
@@ -95,15 +96,24 @@ exports.updateBarangay = AsyncErrorHandler(async (req, res) => {
     });
   }
 
-  const allowedFields = ["name", "city", "coordinates"];
+  // Allowed fields that can be updated
+  const allowedFields = [
+    "barangayName",
+    "municipality",
+    "fullAddress",
+    "coordinates"
+  ];
+
   const updateData = {};
 
   allowedFields.forEach((field) => {
-    const value = req.body[field];
-    if (value !== undefined && value !== null) updateData[field] = value;
+    if (req.body[field] !== undefined && req.body[field] !== null) {
+      updateData[field] = req.body[field];
+    }
   });
 
-  const updated = await Barangay.findByIdAndUpdate(id, updateData, {
+  // Perform update
+  const updatedBarangay = await Barangay.findByIdAndUpdate(id, updateData, {
     new: true,
     runValidators: true,
   });
@@ -111,9 +121,10 @@ exports.updateBarangay = AsyncErrorHandler(async (req, res) => {
   res.status(200).json({
     status: "success",
     message: "Barangay updated successfully.",
-    data: updated,
+    data: updatedBarangay,
   });
 });
+
 
 // Delete Barangay
 exports.deleteBarangay = AsyncErrorHandler(async (req, res) => {
@@ -132,5 +143,18 @@ exports.deleteBarangay = AsyncErrorHandler(async (req, res) => {
   res.status(200).json({
     status: "success",
     message: "Barangay deleted successfully.",
+  });
+});
+
+// Get Barangays for Dropdown
+exports.getBarangays = AsyncErrorHandler(async (req, res, next) => {
+  const barangays = await Barangay.find({ isActive: true })
+    .select('name code city province')
+    .sort({ name: 1 });
+
+  res.status(200).json({
+    success: true,
+    count: barangays.length,
+    data: barangays
   });
 });

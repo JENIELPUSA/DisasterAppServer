@@ -15,7 +15,7 @@ const QuickAccessGrid = ({ menuItems, handleMenuItemPress, setQuickAccessModalVi
           Quick Access
         </Text>
         <TouchableOpacity onPress={() => setQuickAccessModalVisible(true)}>
-          <Text className="text-green-600 font-semibold">View All</Text>
+          <Text className="text-cyan-600 font-semibold">View All</Text>
         </TouchableOpacity>
       </View>
 

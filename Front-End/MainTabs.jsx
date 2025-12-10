@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
   activeIndicator: {
     position: 'absolute',
     height: 4,
-    backgroundColor: '#667eea',
+    backgroundColor: "#0e7490",
     bottom: 0,
     borderRadius: 2,
   },
@@ -171,7 +171,7 @@ export default function MainTabs() {
             tabBarAccessibilityLabel: "Home",
             tabBarIconFocused: "home",
             tabBarIconUnfocused: "home-outline",
-            tabBarGradient: ["#667eea", "#764ba2"],
+            tabBarGradient: ["#0e7490", "#0e7490"],
             tabBarPulseColor: "rgba(102, 126, 234, 0.3)"
           }}
         />
@@ -182,7 +182,7 @@ export default function MainTabs() {
             tabBarAccessibilityLabel: "Explore",
             tabBarIconFocused: "map",
             tabBarIconUnfocused: "map-outline",
-            tabBarGradient: ["#4facfe", "#00f2fe"],
+            tabBarGradient: ["#0e7490", "#0e7490"],
             tabBarPulseColor: "rgba(79, 172, 254, 0.3)"
           }}
         />
@@ -193,7 +193,7 @@ export default function MainTabs() {
             tabBarAccessibilityLabel: "Settings",
             tabBarIconFocused: "settings",
             tabBarIconUnfocused: "settings-outline",
-            tabBarGradient: ["#43e97b", "#38f9d7"],
+            tabBarGradient: ["#0e7490", "#0e7490"],
             tabBarPulseColor: "rgba(67, 233, 123, 0.3)"
           }}
         />
@@ -204,7 +204,7 @@ export default function MainTabs() {
             tabBarAccessibilityLabel: "Profile",
             tabBarIconFocused: "person",
             tabBarIconUnfocused: "person-outline",
-            tabBarGradient: ["#ff9a9e", "#fecfef"],
+            tabBarGradient: ["#0e7490", "#0e7490"],
             tabBarPulseColor: "rgba(255, 154, 158, 0.3)"
           }}
         />

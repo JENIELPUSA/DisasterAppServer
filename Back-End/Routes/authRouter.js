@@ -13,10 +13,6 @@ router.route('/forgotPassword').post(
 );
 router.route('/resetPassword/:token')
 .patch(authController.resetPassword)
-
-router.route('/mail-verification')
-.post(authController.verifyOtp)
-
 router.route('/updatePassword')
 .patch(authController.protect,authController.updatePassword)
 

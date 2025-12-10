@@ -24,6 +24,11 @@ export default {
       },
       package: "com.jenielpusa.sagipbayan", // <-- lowercase at walang underscores
       edgeToEdgeEnabled: true,
+      permissions: [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "INTERNET"
+      ],
     },
     web: {
       bundler: "metro",
@@ -36,7 +41,8 @@ export default {
       },
     },
     plugins: [
-      "expo-video"
+      "expo-video",
+      "expo-location"
     ],
   },
 };

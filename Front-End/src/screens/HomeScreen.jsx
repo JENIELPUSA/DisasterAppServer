@@ -1,33 +1,34 @@
 import "../../global.css";
+import React, { useContext, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   ScrollView,
   TouchableOpacity,
-  Image,
+  SafeAreaView,
+  Alert,
 } from "react-native";
-import {
-  Ionicons,
-} from "@expo/vector-icons";
-import React, { useState } from "react";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
-// Import Components
+// Components
 import Carousel from "../components/Carousel";
 import EducationalVideos from "../components/EducationalVideos";
 import AnalyticalReportsPreview from "../components/AnalyticalReportsPreview";
 import QuickAccessGrid from "../components/QuickAccessGrid";
+import { BarangayDisplayContext } from "../contexts/BrgyContext/BarangayContext";
 
-// Import Modals
+// Modals
 import ViewHouseholdsModal from "../components/modals/ViewHouseholdsModal";
 import VideosModal from "../components/modals/VideosModal";
 import QuickAccessModal from "../components/modals/QuickAccessModal";
 import AnalyticalReportsModal from "../components/modals/AnalyticalReportsModal";
 import ReportBahaModal from "../components/modals/ReportBahaModal";
 import ReportNasirangBahayModal from "../components/modals/ReportNasirangBahayModal";
+import Barangay from "../components/modals/Barangay";
+import RegisterBarangayForm from "../components/RegisterBarangay";
 
-// Import Data
+// Dummy Data
 import {
   analyticalReportsData,
   carouselData,
@@ -38,16 +39,32 @@ import {
 } from "../components/data/dummyData";
 
 export default function HomeScreen() {
+  const {
+    addBarangay,
+    barangays,
+    updateBarangay,
+    deleteBarangay,
+    fetchBarangays,
+  } = useContext(BarangayDisplayContext);
+
+  // Modal states
   const [analyticalReportsModalVisible, setAnalyticalReportsModalVisible] =
     useState(false);
   const [videosModalVisible, setVideosModalVisible] = useState(false);
   const [quickAccessModalVisible, setQuickAccessModalVisible] = useState(false);
   const [viewHouseholdModalVisible, setViewHouseholdModalVisible] =
     useState(false);
+  const [barangayModalVisible, setBarangayModalVisible] = useState(false);
+  const [registerBarangayModalVisible, setRegisterBarangayModalVisible] =
+    useState(false);
+
+  // Selected items
   const [selectedBarangay, setSelectedBarangay] = useState(null);
+  const [selectedMunicipalityForForm, setSelectedMunicipalityForForm] =
+    useState(null);
   const [searchHousehold, setSearchHousehold] = useState("");
 
-  // Flood Report States
+  // Flood report states
   const [reportBahaModalVisible, setReportBahaModalVisible] = useState(false);
   const [selectedBahaMedia, setSelectedBahaMedia] = useState([]);
   const [bahaLocation, setBahaLocation] = useState(null);
@@ -64,7 +81,7 @@ export default function HomeScreen() {
     emergencyNeeded: false,
   });
 
-  // House Damage Report States
+  // House damage report states
   const [reportNasirangBahayModalVisible, setReportNasirangBahayModalVisible] =
     useState(false);
   const [selectedNasirangBahayMedia, setSelectedNasirangBahayMedia] = useState(
@@ -83,23 +100,17 @@ export default function HomeScreen() {
     needShelter: false,
     emergencyNeeded: false,
   });
-
-  const handleVideoPress = (video) => {
+  const handleVideoPress = (video) =>
     console.log("Video pressed:", video.title);
-  };
 
   const handleMenuItemPress = (item) => {
-    console.log("Menu item pressed:", item.title);
-
-    if (item.title === "View Households") {
-      setViewHouseholdModalVisible(true);
-    } else if (item.title === "Report Baha sa Daan") {
+    if (item.title === "View Households") setViewHouseholdModalVisible(true);
+    else if (item.title === "Report Baha sa Daan")
       setReportBahaModalVisible(true);
-    } else if (item.title === "Report Nasirang Bahay") {
+    else if (item.title === "Report Nasirang Bahay")
       setReportNasirangBahayModalVisible(true);
-    } else {
-      setQuickAccessModalVisible(false);
-    }
+    else if (item.title === "View Barangay") setBarangayModalVisible(true);
+    else setQuickAccessModalVisible(false);
   };
 
   const handleBackToBarangayList = () => {
@@ -107,7 +118,6 @@ export default function HomeScreen() {
     setSearchHousehold("");
   };
 
-  // Reset function for flood report forms
   const resetBahaReportForms = () => {
     setSelectedBahaMedia([]);
     setBahaLocation(null);
@@ -125,7 +135,6 @@ export default function HomeScreen() {
     });
   };
 
-  // Reset function for house damage report forms
   const resetNasirangBahayReportForms = () => {
     setSelectedNasirangBahayMedia([]);
     setNasirangBahayLocation(null);
@@ -142,113 +151,111 @@ export default function HomeScreen() {
     });
   };
 
+  // Handle opening RegisterBarangayForm from Barangay modal
+  const handleOpenRegisterForm = (municipality) => {
+    if (!municipality) {
+      Alert.alert("Error", "Please select a municipality first.");
+      return;
+    }
+    setSelectedMunicipalityForForm(municipality);
+    setBarangayModalVisible(false);
+    setRegisterBarangayModalVisible(true);
+  };
+
+  // Handle registering a new barangay
+  const handleRegisterBarangay = (barangayData) => {
+    if (addBarangay) {
+      addBarangay(barangayData);
+      Alert.alert("Success", "Barangay added successfully!");
+    }
+    // Reset municipality selection after registration
+    setSelectedMunicipalityForForm(null);
+  };
+
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      {/* Header Section */}
-      <View className="h-40 bg-blue-500 flex-row justify-between items-center px-6 mb-2">
-        <View className="flex-row items-center flex-1">
-          <View className="w-16 h-16 bg-white rounded-full justify-center items-center shadow-lg">
-            <Text className="text-green-500 text-xl font-bold">P</Text>
-          </View>
+    <SafeAreaView className="flex-1">
+      {/* Header */}
+      <View className="bg-cyan-700 pb-4 pt-10">
+        {/* Search Bar - Slim UI */}
+        <View className="mx-5 mb-3">
+          <View className="flex-row items-center bg-white rounded-xl px-3 py-2 border border-gray-200">
+            <Ionicons name="search" size={18} color="#6B7280" />
 
-          <View className="ml-4 flex-1">
-            <Text className="text-green-100 text-sm">Good morning</Text>
-            <Text className="text-white text-xl font-bold mt-1">
-              Welcome Mr. Pusa
-            </Text>
+            <TextInput
+              placeholder="Search..."
+              className="flex-1 ml-2 text-sm"
+              placeholderTextColor="#9CA3AF"
+            />
+
+            <TouchableOpacity>
+              <Ionicons name="filter" size={18} color="#6B7280" />
+            </TouchableOpacity>
           </View>
         </View>
 
-        <TouchableOpacity className="w-10 h-10 bg-white/20 rounded-full justify-center items-center">
-          <Ionicons name="notifications-outline" size={24} color="white" />
-          <View className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Search Bar */}
-      <View className="mx-5 -mt-10  z-10">
-        <View className="flex-row items-center bg-white rounded-2xl px-4 py-4 shadow-lg border border-gray-100">
-          <Ionicons name="search" size={22} color="#6B7280" />
-          <TextInput
-            placeholder="Search services, reports..."
-            className="flex-1 ml-3 text-base"
-            placeholderTextColor="#9CA3AF"
-          />
-          <View className="w-px h-6 bg-gray-200 mx-2" />
-          <Ionicons name="filter" size={22} color="#6B7280" />
+        {/* Welcome Section - nasa ibaba ng search bar */}
+        <View className="flex-row items-center justify-between px-5">
+          <View className="flex-row items-center">
+            <View className="w-14 h-14 bg-white rounded-full justify-center items-center shadow-lg">
+              <Text className="text-green-500 text-xl font-bold">P</Text>
+            </View>
+            <View className="ml-4">
+              <Text className="text-green-100 text-sm">Good morning</Text>
+              <Text className="text-white text-xl font-bold mt-1">
+                Welcome Mr. Pusa
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity className="w-10 h-10 bg-white/20 rounded-full justify-center items-center">
+            <Ionicons name="notifications-outline" size={24} color="white" />
+            <View className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white" />
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Main Content */}
+      {/* Main ScrollView */}
       <ScrollView
         className="flex-1 bg-gray-50"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: 20, paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 20 }}
       >
-        {/* Quick Access Grid */}
         <QuickAccessGrid
           menuItems={menuItems}
           handleMenuItemPress={handleMenuItemPress}
           setQuickAccessModalVisible={setQuickAccessModalVisible}
         />
-
         <Carousel data={carouselData} />
-
         <View className="px-5 mb-6">
           <AnalyticalReportsPreview
             analyticalReportsData={analyticalReportsData}
             setAnalyticalReportsModalVisible={setAnalyticalReportsModalVisible}
           />
         </View>
-
         <EducationalVideos
           educationalVideos={educationalVideos}
           handleVideoPress={handleVideoPress}
           setVideosModalVisible={setVideosModalVisible}
         />
-
-        <View className="px-5 mb-20">
-          <Text className="text-gray-800 text-xl font-bold mb-4">
-            Emergency
-          </Text>
-          <TouchableOpacity className="bg-red-500 rounded-2xl p-5 flex-row items-center shadow-lg">
-            <View className="w-12 h-12 bg-white/20 rounded-xl justify-center items-center">
-              <Ionicons name="alert-circle" size={28} color="white" />
-            </View>
-            <View className="ml-4 flex-1">
-              <Text className="text-white text-lg font-bold">
-                Emergency Report
-              </Text>
-              <Text className="text-white/80 text-sm mt-1">
-                Report immediate dangers or emergencies
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color="white" />
-          </TouchableOpacity>
-        </View>
       </ScrollView>
 
-      {/* All Modals */}
+      {/* Modals */}
       <VideosModal
         visible={videosModalVisible}
         onClose={() => setVideosModalVisible(false)}
         educationalVideos={educationalVideos}
         handleVideoPress={handleVideoPress}
       />
-
       <QuickAccessModal
         visible={quickAccessModalVisible}
         onClose={() => setQuickAccessModalVisible(false)}
         menuItems={menuItems}
         handleMenuItemPress={handleMenuItemPress}
       />
-
       <AnalyticalReportsModal
         visible={analyticalReportsModalVisible}
         onClose={() => setAnalyticalReportsModalVisible(false)}
         analyticalReportsData={analyticalReportsData}
       />
-
       <ViewHouseholdsModal
         viewHouseholdModalVisible={viewHouseholdModalVisible}
         setViewHouseholdModalVisible={setViewHouseholdModalVisible}
@@ -260,8 +267,6 @@ export default function HomeScreen() {
         householdData={householdData}
         handleBackToBarangayList={handleBackToBarangayList}
       />
-
-      {/* Flood Report Modal */}
       <ReportBahaModal
         reportBahaModalVisible={reportBahaModalVisible}
         setReportBahaModalVisible={setReportBahaModalVisible}
@@ -275,8 +280,6 @@ export default function HomeScreen() {
         setBahaData={setBahaData}
         resetReportForms={resetBahaReportForms}
       />
-
-      {/* House Damage Report Modal */}
       <ReportNasirangBahayModal
         reportNasirangBahayModalVisible={reportNasirangBahayModalVisible}
         setReportNasirangBahayModalVisible={setReportNasirangBahayModalVisible}
@@ -289,6 +292,26 @@ export default function HomeScreen() {
         nasirangBahayData={nasirangBahayData}
         setNasirangBahayData={setNasirangBahayData}
         resetReportForms={resetNasirangBahayReportForms}
+      />
+
+      {/* Barangay & Register Form */}
+      <Barangay
+        visible={barangayModalVisible}
+        onClose={() => setBarangayModalVisible(false)}
+        onAddBarangay={handleOpenRegisterForm}
+        barangays={barangays}
+        updateBarangay={updateBarangay}
+        deleteBarangay={deleteBarangay}
+        fetchBarangays={fetchBarangays}
+      />
+      <RegisterBarangayForm
+        visible={registerBarangayModalVisible}
+        onClose={() => {
+          setRegisterBarangayModalVisible(false);
+          setSelectedMunicipalityForForm(null);
+        }}
+        addBarangay={handleRegisterBarangay}
+        selectedMunicipality={selectedMunicipalityForForm}
       />
     </SafeAreaView>
   );

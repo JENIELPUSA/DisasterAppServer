@@ -1,10 +1,10 @@
 {
   "hostType": "lan",
   "lanType": "ip",
-  "devClient": true,
   "dev": true,
   "minify": false,
   "urlRandomness": null,
   "https": false,
-  "scheme": "exp+sagipbayandisasterapp"
+  "scheme": null,
+  "devClient": false
 }

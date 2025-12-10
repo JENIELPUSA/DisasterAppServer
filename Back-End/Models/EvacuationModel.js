@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const EvacuationSchema = new mongoose.Schema(
   {
+    evacuationName: { type: String },
     barangay: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Barangay",

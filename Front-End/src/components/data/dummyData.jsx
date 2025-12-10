@@ -335,7 +335,7 @@ export const menuItems = [
   },
   {
     id: 12,
-    title: "Register Barangay",
+    title: "View Barangay",
     icon: "business-outline",
     color: "#6366F1",
   },

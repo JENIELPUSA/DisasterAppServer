@@ -5,6 +5,12 @@ const streamifier = require("streamifier");
 const CustomError = require("../Utils/CustomError");
 const jwt = require("jsonwebtoken");
 const util = require("util");
+const User = require("../Models/UserModel");
+const Rescuer = require("../Models/Rescuer");
+const HouseholdLead = require("../Models/HouseholdLead");
+const BarangayCaptain = require("../Models/BarangayCaptain");
+const Barangay = require("../Models/Barangay");
+const HouseholdMember = require("../Models/HouseholdMember");
 const crypto = require("crypto");
 const sendEmail = require("./../Utils/email");
 const cloudinary = require("../Utils/cloudinary");
@@ -15,55 +21,36 @@ const signToken = (id, role, linkId) => {
   });
 };
 
+// Complete Registration with Role-Specific Data
 exports.signup = AsyncErrorHandler(async (req, res) => {
   try {
+    console.time("RegistrationProcess");
+
     const {
-      contact_number,
-      first_name,
-      last_name,
+      // Common fields
+      fullName,
       email,
+      password,
+      contactNumber,
+      address,
       role,
-      extention,
-      gender,
-      middle_name,
+      barangay,
+
+      // Role-specific fields
+      organization,
+      idNumber,
+      familyMembers,
+      householdLeadId,
+      relationship,
+      householdLeadName,
+      householdAddress,
     } = req.body;
 
-    const generateRandomPassword = () => {
-      const prefix = "user122";
-      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%";
-      let randomPart = "";
-      for (let i = 0; i < 6; i++) {
-        randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return prefix + randomPart;
-    };
-
-    const defaultPassword = generateRandomPassword();
-    const modelMap = {
-      admin: Admin,
-      organizer: Organizer,
-      staff: Officer,
-      lgu: Lgu, // <-- fixed here
-    };
-
-    const ProfileModel = modelMap[role];
-    if (!ProfileModel) {
-      return res.status(400).json({
-        message: "Invalid role provided. Must be 'admin', 'staff', 'organizer', or 'lgu'.",
-      });
-    }
-
-    const requiredFields = ["first_name", "last_name", "email"];
-    const missingFields = requiredFields.filter((field) => !req.body[field]);
-    if (missingFields.length > 0) {
-      return res.status(400).json({
-        message: `Missing required fields: ${missingFields.join(", ")}`,
-      });
-    }
-
-    const existingUser = await UserLogin.findOne({ username: email });
+    // Check if user already exists
+    const existingUser = await UserLogin.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
+        success: false,
         message: "User with this email already exists!",
       });
     }
@@ -72,11 +59,10 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
     if (req.file) {
       try {
         console.time("UploadAvatar");
-
         const uploadFromBuffer = (buffer) =>
           new Promise((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream(
-              { folder: "LGU_EVENT_MANAGEMENT/Profile" },
+              { folder: "EMERGENCY_SYSTEM/Profile" },
               (error, result) => {
                 if (result) resolve(result);
                 else reject(error);
@@ -86,65 +72,251 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
           });
 
         const uploadedResponse = await uploadFromBuffer(req.file.buffer);
-
         avatar = {
           public_id: uploadedResponse.public_id,
           url: uploadedResponse.secure_url,
         };
-
         console.timeEnd("UploadAvatar");
       } catch (uploadErr) {
         console.error("❌ Avatar upload failed:", uploadErr);
         return res.status(500).json({
+          success: false,
           message: "Failed to upload avatar.",
           error: uploadErr.message,
         });
       }
     }
 
-    const commonFields = {
-      avatar,
-      first_name,
-      last_name,
-      middle_name,
-      email,
-      extention,
-      contact_number,
-      gender,
+    // Map roles to their respective models
+    const roleModelMap = {
+      rescuer: Rescuer,
+      household_lead: HouseholdLead,
+      brgy_captain: BarangayCaptain,
+      household_member: HouseholdMember,
     };
 
-    const linkedRecord = await ProfileModel.create(commonFields);
+    const ProfileModel = roleModelMap[role];
+    if (!ProfileModel) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid role provided. Must be 'rescuer', 'household_lead', 'brgy_captain', or 'household_member'.",
+      });
+    }
 
-    const [newUserLogin] = await Promise.all([
-      UserLogin.create({
-        avatar: avatar?.url || null,
-        first_name,
-        last_name,
-        username: email,
-        contact_number,
-        password: defaultPassword,
-        role,
-        linkedId: linkedRecord._id,
-        isVerified: true,
-      }),
-      sendEmail({
-        email,
-        subject: "Your Account Credentials",
-        text: `Welcome to the system!\n\nYour account has been created successfully.\n\nDefault Password: ${defaultPassword}\n\nPlease change your password after logging in.`,
-      }),
-    ]);
-
-    console.timeEnd("SignupProcess");
-
-    return res.status(201).json({
-      status: "success",
-      user: newUserLogin,
-      profile: linkedRecord,
+    // Create User document
+    const newUser = await UserLogin.create({
+      fullName,
+      username: email,
+      password,
+      contactNumber,
+      address,
+      role,
+      barangay: ["household_lead", "brgy_captain"].includes(role)
+        ? barangay
+        : undefined,
+      isVerified: true,
+      avatar: avatar?.url || null,
     });
+
+    let linkedRecord = null;
+    let verificationCode = null;
+
+    // Create role-specific profile
+    switch (role) {
+      case "rescuer":
+        linkedRecord = await Rescuer.create({
+          userId: newUser._id,
+          organization,
+          idNumber,
+          specialization: "other",
+          availability: true,
+        });
+        break;
+
+      case "household_lead":
+        // Check if barangay exists
+        if (barangay) {
+          const barangayExists = await Barangay.findOne({
+            barangayName: barangay,
+          });
+          if (!barangayExists) {
+            await User.findByIdAndDelete(newUser._id);
+            return res.status(400).json({
+              success: false,
+              message: "Barangay not found",
+            });
+          }
+        }
+
+        linkedRecord = await HouseholdLead.create({
+          userId: newUser._id,
+          familyMembers,
+          totalMembers: 1,
+        });
+        break;
+
+      case "brgy_captain":
+        // Check if ID number already exists
+        const existingCaptainId = await BarangayCaptain.findOne({ idNumber });
+        if (existingCaptainId) {
+          await User.findByIdAndDelete(newUser._id);
+          return res.status(400).json({
+            success: false,
+            message: "ID number already exists",
+          });
+        }
+
+        // Check if barangay already has a captain
+        const existingBarangayCaptain = await BarangayCaptain.findOne({
+          barangayName: barangay,
+        });
+        if (existingBarangayCaptain) {
+          await User.findByIdAndDelete(newUser._id);
+          return res.status(400).json({
+            success: false,
+            message: "Barangay already has a captain assigned",
+          });
+        }
+
+        // Check if barangay exists
+        const barangayExists = await Barangay.findOne({ barangayName: barangay });
+        if (!barangayExists) {
+          await User.findByIdAndDelete(newUser._id);
+          return res.status(400).json({
+            success: false,
+            message: "Barangay not found",
+          });
+        }
+
+        linkedRecord = await BarangayCaptain.create({
+          userId: newUser._id,
+          idNumber,
+          organization,
+          barangayName: barangay,
+          termStart: new Date(),
+        });
+
+        // Update barangay with captain
+        await Barangay.findOneAndUpdate(
+          { name: barangay },
+          { $set: { barangayCaptainId: linkedRecord._id } }
+        );
+        break;
+
+      case "household_member":
+        // Check if household lead exists
+        const householdLead = await HouseholdLead.findById(householdLeadId);
+        if (!householdLead) {
+          await User.findByIdAndDelete(newUser._id);
+          return res.status(404).json({
+            success: false,
+            message: "Household lead not found",
+          });
+        }
+
+        // Check if household is full
+        if (
+          householdLead.isFull ||
+          householdLead.totalMembers >= householdLead.familyMembers
+        ) {
+          await User.findByIdAndDelete(newUser._id);
+          return res.status(400).json({
+            success: false,
+            message: "Household is full",
+          });
+        }
+
+        // Generate verification code
+        verificationCode = Math.random()
+          .toString(36)
+          .substr(2, 6)
+          .toUpperCase();
+
+        linkedRecord = await HouseholdMember.create({
+          userId: newUser._id,
+          householdLeadId,
+          relationship,
+          householdAddress,
+          householdLeadName,
+          verificationCode,
+          isVerified: false,
+        });
+
+        // Update household lead member count
+        await HouseholdLead.findByIdAndUpdate(householdLeadId, {
+          $inc: { totalMembers: 1 },
+          isFull: householdLead.totalMembers + 1 >= householdLead.familyMembers,
+        });
+
+        // Send verification email to household lead
+        const leadUser = await User.findById(householdLead.userId);
+        if (leadUser) {
+          await sendEmail({
+            email: leadUser.email,
+            subject: "New Household Member Registration",
+            text: `A new member (${fullName}) has registered under your household.\nRelationship: ${relationship}\nVerification Code: ${verificationCode}`,
+          });
+        }
+        break;
+
+      default:
+        await User.findByIdAndDelete(newUser._id);
+        return res.status(400).json({
+          success: false,
+          message: "Invalid role",
+        });
+    }
+
+    // Update user with linkedId
+    newUser.linkedId = linkedRecord._id;
+    await newUser.save();
+
+    // Generate token
+    const token = signToken(newUser._id, newUser.role, linkedRecord._id);
+
+    // Send welcome email
+    try {
+      await sendEmail({
+        email: newUser.email,
+        subject: "Welcome to Emergency Response System",
+        text: `Welcome ${fullName}!\n\nYour account has been created successfully.\n\nRole: ${role}\n\nYou can now login to the system using your email and password.`,
+      });
+    } catch (emailErr) {
+      console.warn("Failed to send welcome email:", emailErr);
+    }
+
+    console.timeEnd("RegistrationProcess");
+
+    const response = {
+      success: true,
+      message: "Registration completed successfully",
+      data: {
+        user: {
+          _id: newUser._id,
+          fullName: newUser.fullName,
+          email: newUser.email,
+          role: newUser.role,
+          linkedId: linkedRecord._id,
+        },
+        roleProfile: linkedRecord,
+        token,
+      },
+    };
+
+    // Add verification info for household members
+    if (role === "household_member") {
+      response.message =
+        "Registration completed. Awaiting verification from household lead.";
+      response.data.verificationRequired = true;
+    }
+
+    return res.status(201).json(response);
   } catch (error) {
-    console.error("Signup Error:", error);
+    console.error("Registration Error:", error);
     return res.status(500).json({
-      message: "Something went wrong during signup.",
+      success: false,
+      message: "Something went wrong during registration.",
       error: error.message,
     });
   }
@@ -168,7 +340,6 @@ const createSendResponse = (user, statusCode, res) => {
     data: { user },
   });
 };
-
 
 
 exports.login = AsyncErrorHandler(async (req, res, next) => {
@@ -225,6 +396,7 @@ exports.login = AsyncErrorHandler(async (req, res, next) => {
     theme: user.theme,
   });
 });
+
 
 exports.logout = AsyncErrorHandler((req, res, next) => {
   req.session.destroy((err) => {

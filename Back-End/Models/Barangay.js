@@ -2,12 +2,13 @@ const mongoose = require("mongoose");
 
 const BarangaySchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, unique: true },
-    city: { type: String, required: true }, // Added city
+    barangayName: { type: String},
+    municipality: { type: String, required: true }, // Added city
     coordinates: {
-      lat: { type: Number, required: true },
-      lng: { type: Number, required: true },
+      latitude: { type: Number, required: true },
+      longitude: { type: Number, required: true },
     },
+    fullAddress:{ type: String},
   },
   {
     timestamps: true, 
