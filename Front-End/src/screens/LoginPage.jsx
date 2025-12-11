@@ -13,16 +13,15 @@ import NavigationButtons from "../components/Carousels/NavigationButton";
 import LoginForm from "../components/LoginForm";
 import { AuthContext } from "../contexts/AuthContext";
 import LoadingOverlay from "../ReusableComponent/LoadingOverlay";
-
+import { BarangayDisplayContext } from "../contexts/BrgyContext/BarangayContext"
 export default function LoginPage({ navigation }) {
   const { login, signup, checkEmailAvailability } = useContext(AuthContext); // Added signup and checkEmailAvailability
-
+  const { isBarangaysDropdown } = useContext(BarangayDisplayContext)
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [currentSlide, setCurrentSlide] = useState(0);
-
   const scrollViewRef = useRef(null);
   const screenWidth = 360;
 

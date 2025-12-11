@@ -21,6 +21,7 @@ export const BarangayDisplayProvider = ({ children }) => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isBarangaysDropdown, setBarangaysDropdown] = useState([])
   const backendUrl = Constants.expoConfig.extra.apiUrl; // Expo environment variable
 
   const handleError = (error) => {
@@ -30,47 +31,84 @@ export const BarangayDisplayProvider = ({ children }) => {
 
 
 
-const fetchBarangays = useCallback(
-  async (search = "", page = 1) => {
-    if (!authToken) return;
+  const fetchBarangays = useCallback(
+    async (search = "", page = 1) => {
+      if (!authToken) return;
 
-    try {
-      setLoading(true);
+      try {
+        setLoading(true);
 
-      const searchText =
-        typeof search === "string" ? search.trim() : "";
+        const searchText =
+          typeof search === "string" ? search.trim() : "";
 
-      const params = {};
-      if (searchText.length > 0) params.search = searchText;
-      if (page) params.page = page;
+        const params = {};
+        if (searchText.length > 0) params.search = searchText;
+        if (page) params.page = page;
 
-      const res = await axios.get(`${backendUrl}/api/v1/Barangay`, {
-        params,
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          "Cache-Control": "no-cache",
-        },
-      });
+        const res = await axios.get(`${backendUrl}/api/v1/Barangay`, {
+          params,
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Cache-Control": "no-cache",
+          },
+        });
 
-      const {
-        data,
-        totalItems,
-        currentPage: resCurrentPage,
-        totalPages: resTotalPages,
-      } = res.data;
+        const {
+          data,
+          totalItems,
+          currentPage: resCurrentPage,
+          totalPages: resTotalPages,
+        } = res.data;
 
-      setBarangays(data || []);
-      setTotalBarangays(totalItems || 0);
-      setCurrentPage(resCurrentPage || page);
-      setTotalPages(resTotalPages || 1);
-    } catch (error) {
-      handleError(error);
-    } finally {
-      setLoading(false);
-    }
-  },
-  [authToken]
-);
+        setBarangays(data || []);
+        setTotalBarangays(totalItems || 0);
+        setCurrentPage(resCurrentPage || page);
+        setTotalPages(resTotalPages || 1);
+      } catch (error) {
+        handleError(error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authToken]
+  );
+
+
+ const BarangayDropdown = useCallback(
+    async (search = "", page = 1) => {
+      if (!authToken) return;
+
+      try {
+        setLoading(true);
+
+        const searchText = typeof search === "string" ? search.trim() : "";
+        const params = {};
+        if (searchText.length > 0) params.search = searchText;
+        if (page) params.page = page;
+        params.limit = 10; // optional limit
+
+        const res = await axios.get(`${backendUrl}/api/v1/Barangay/BarangayDropdown`, {
+          params,
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Cache-Control": "no-cache",
+          },
+        });
+
+        const { data, totalItems, currentPage: resCurrentPage, totalPages: resTotalPages } = res.data;
+
+        setBarangaysDropdown(data || []);
+        setTotalBarangays(totalItems || 0);
+        setCurrentPage(resCurrentPage || page);
+        setTotalPages(resTotalPages || 1);
+      } catch (error) {
+        console.error("Error fetching barangays:", error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authToken, backendUrl]
+  );
 
 
   function safeTrim(value) {
@@ -81,10 +119,11 @@ const fetchBarangays = useCallback(
   useEffect(() => {
     const timeout = setTimeout(() => {
       fetchBarangays(1);
+      BarangayDropdown();
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [search, dateFrom, dateTo, fetchBarangays]);
+  }, [search, dateFrom, dateTo, fetchBarangays,BarangayDropdown]);
 
   const addBarangay = async (values) => {
     try {
@@ -213,7 +252,7 @@ const fetchBarangays = useCallback(
         deleteBarangay,
         updateBarangay,
         toggleBarangayStatus,
-        getBarangay,
+        getBarangay, isBarangaysDropdown
       }}
     >
       {children}

@@ -148,13 +148,13 @@ exports.deleteBarangay = AsyncErrorHandler(async (req, res) => {
 
 // Get Barangays for Dropdown
 exports.getBarangays = AsyncErrorHandler(async (req, res, next) => {
-  const barangays = await Barangay.find({ isActive: true })
-    .select('name code city province')
-    .sort({ name: 1 });
+  const barangays = await Barangay.find()
+    .select('barangayName') // Only include barangayName
+    .sort({ barangayName: 1 });
 
   res.status(200).json({
     success: true,
-    count: barangays.length,
+    count: data.length,
     data: barangays
   });
 });
