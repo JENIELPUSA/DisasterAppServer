@@ -1,0 +1,27 @@
+{
+  "cli": {
+    "version": ">= 16.27.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "android": {
+    "buildType": "apk"
+  },
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://disasterappserver.onrender.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

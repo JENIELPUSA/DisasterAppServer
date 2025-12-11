@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+      body, html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+      }
+      #map {
+        width: 100%;
+        height: 100%;
+      }
+      .legend {
+        position: absolute;
+        top: 80px;
+        right: 0;
+        background: white;
+        padding: 8px 10px;
+        border-radius: 6px 0 0 6px;
+        box-shadow: -2px 0 6px rgba(0,0,0,0.15);
+        z-index: 1000;
+        font-family: Arial, sans-serif;
+        font-size: 11px;
+        transition: opacity 0.3s ease;
+        border-left: 2px solid #f0f0f0;
+        max-width: 140px;
+        line-height: 1.3;
+      }
+      .legend-header {
+        font-weight: bold;
+        margin-bottom: 6px;
+        text-align: left;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #eee;
+      }
+      .legend-items {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+      }
+      .legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 6px;
+        border: 1px solid white;
+        flex-shrink: 0;
+      }
+      .legend-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 4px;
+      }
+      .full { background-color: #ef4444; }
+      .high { background-color: #f97316; }
+      .available { background-color: #10b981; }
+      .unknown { background-color: #6b7280; }
+      .municipal { background-color: #3b82f6; }
+      
+      /* Animation for markers */
+      .municipality-marker {
+        transition: transform 0.3s ease;
+      }
+      .evacuation-marker {
+        transition: transform 0.3s ease;
+      }
+      .marker-pulse {
+        animation: pulse 2s infinite;
+      }
+      
+      @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+      }
+      
+      /* Professional municipality icon styles */
+      .municipality-icon {
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35), 0 2px 4px rgba(59, 130, 246, 0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+      }
+      
+      .municipality-icon::before {
+        content: '';
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.3), transparent 60%);
+        border-radius: 50%;
+        pointer-events: none;
+      }
+      
+      .municipality-number {
+        color: white;
+        font-size: 13px;
+        font-weight: 700;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        z-index: 1;
+        letter-spacing: -0.5px;
+      }
+      
+      .municipality-icon:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 16px rgba(59, 130, 246, 0.45), 0 3px 6px rgba(59, 130, 246, 0.35);
+      }
+      
+      /* Professional House icon styles */
+      .house-icon {
+        width: 36px;
+        height: 36px;
+        position: relative;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        border-radius: 50%;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: visible;
+        border: 3px solid white;
+      }
+      
+      .house-roof {
+        position: absolute;
+        top: 6px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 9px solid transparent;
+        border-right: 9px solid transparent;
+        border-bottom: 7px solid #8b5cf6;
+        filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+      }
+      
+      .house-body {
+        position: absolute;
+        bottom: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 14px;
+        height: 11px;
+        background: #6366f1;
+        border-radius: 2px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 8px;
+        font-weight: 700;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        letter-spacing: -0.5px;
+      }
+      
+      .house-body::after {
+        content: '';
+        position: absolute;
+        bottom: 1px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 4px;
+        height: 5px;
+        background: rgba(255,255,255,0.3);
+        border-radius: 1px;
+      }
+      
+      .house-full {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+      }
+      
+      .house-full .house-roof {
+        border-bottom-color: #b91c1c;
+      }
+      
+      .house-high {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+      }
+      
+      .house-high .house-roof {
+        border-bottom-color: #b45309;
+      }
+      
+      .house-available {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+      }
+      
+      .house-available .house-roof {
+        border-bottom-color: #047857;
+      }
+      
+      .house-unknown {
+        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+        box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.2);
+      }
+      
+      .house-unknown .house-roof {
+        border-bottom-color: #374151;
+      }
+      
+      /* Professional full status animation */
+      .house-full-animation {
+        animation: professionalPulse 2s ease-in-out infinite;
+      }
+      
+      @keyframes professionalPulse {
+        0%, 100% { 
+          transform: scale(1);
+          box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4), 0 2px 4px rgba(239, 68, 68, 0.3);
+        }
+        50% { 
+          transform: scale(1.08);
+          box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6), 0 3px 8px rgba(239, 68, 68, 0.4);
+        }
+      }
+      
+      /* Responsive adjustments */
+      @media (max-width: 768px) {
+        .legend {
+          top: 70px;
+          max-width: 130px;
+          font-size: 10px;
+          padding: 6px 8px;
+        }
+        .legend-color {
+          width: 10px;
+          height: 10px;
+          margin-right: 5px;
+        }
+        .house-icon {
+          width: 30px;
+          height: 30px;
+        }
+        .house-roof {
+          border-left: 8px solid transparent;
+          border-right: 8px solid transparent;
+          border-bottom: 6px solid #8b5cf6;
+        }
+        .house-body {
+          width: 12px;
+          height: 9px;
+          font-size: 7px;
+        }
+        .municipality-icon {
+          width: 28px;
+          height: 28px;
+        }
+        .municipality-number {
+          font-size: 11px;
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .legend {
+          top: 60px;
+          max-width: 120px;
+          font-size: 9px;
+          padding: 5px 7px;
+        }
+        .legend-color {
+          width: 9px;
+          height: 9px;
+          margin-right: 4px;
+        }
+      }
+      
+      /* Hover effect for legend */
+      .legend:hover {
+        box-shadow: -2px 0 8px rgba(0,0,0,0.2);
+        border-left: 2px solid #3b82f6;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <script>
+      let map;
+      let currentMarkers = [];
+      let currentView = "municipalities";
+
+      // Function to clear all markers from the map
+      function clearMarkers() {
+        currentMarkers.forEach(marker => {
+          map.removeLayer(marker);
+        });
+        currentMarkers = [];
+      }
+
+      // Function to add municipality/barangay markers
+      function addMunicipalityMarkers(municipalities) {
+        clearMarkers();
+        
+        municipalities.forEach((item, index) => {
+          if (!item.coordinates?.latitude || !item.coordinates?.longitude) return;
+
+          const lat = item.coordinates.latitude;
+          const lng = item.coordinates.longitude;
+
+          // Create professional custom icon for municipalities
+          const municipalityIcon = L.divIcon({
+            className: 'municipality-marker',
+            html: `
+              <div class="municipality-icon">
+                <span class="municipality-number">${index + 1}</span>
+              </div>
+            `,
+            iconSize: [38, 38],
+            iconAnchor: [19, 19],
+            popupAnchor: [0, -19]
+          });
+
+          const marker = L.marker([lat, lng], { icon: municipalityIcon }).addTo(map);
+          currentMarkers.push(marker);
+
+          // Popup content
+          let popupContent = `<b>${item.barangayName || "Unnamed Barangay"}</b><br/>`;
+          if (item.fullAddress) {
+            popupContent += `<small>${item.fullAddress}</small><br/>`;
+          }
+          if (item.municipality) {
+            popupContent += `<small>Municipality: ${item.municipality}</small>`;
+          }
+
+          marker.bindPopup(popupContent);
+
+          // Auto zoom to marker on click
+          marker.on("click", () => {
+            map.flyTo([lat, lng], 17, {
+              animate: true,
+              duration: 1.5,
+            });
+          });
+        });
+        
+        // Fit bounds to show all markers
+        if (municipalities.length > 0) {
+          const bounds = L.latLngBounds(
+            municipalities
+              .filter(item => item.coordinates?.latitude && item.coordinates?.longitude)
+              .map(item => [item.coordinates.latitude, item.coordinates.longitude])
+          );
+          map.fitBounds(bounds.pad(0.1));
+        }
+      }
+
+      // Function to add evacuation center markers with house icons
+      function addEvacuationMarkers(evacuations) {
+        clearMarkers();
+        
+        evacuations.forEach((item, index) => {
+          if (!item.location?.latitude || !item.location?.longitude) return;
+
+          const lat = item.location.latitude;
+          const lng = item.location.longitude;
+
+          // Get status and corresponding house color
+          let statusClass = 'house-unknown';
+          let houseColor = '#6b7280';
+          let statusText = 'Unknown';
+          
+          if (item.status) {
+            switch(item.status.toLowerCase()) {
+              case 'full':
+                statusClass = 'house-full';
+                houseColor = '#ef4444';
+                statusText = 'Full';
+                break;
+              case 'high':
+                statusClass = 'house-high';
+                houseColor = '#f97316';
+                statusText = 'High';
+                break;
+              case 'available':
+                statusClass = 'house-available';
+                houseColor = '#10b981';
+                statusText = 'Available';
+                break;
+            }
+          }
+
+          // Create professional custom house icon for evacuation centers
+          const evacuationIcon = L.divIcon({
+            className: `evacuation-marker ${statusClass === 'house-full' ? 'house-full-animation' : ''}`,
+            html: `
+              <div class="house-icon ${statusClass}">
+                <div class="house-roof"></div>
+                <div class="house-body">
+                  ${index + 1}
+                </div>
+              </div>
+            `,
+            iconSize: [42, 42],
+            iconAnchor: [21, 21],
+            popupAnchor: [0, -21]
+          });
+
+          const marker = L.marker([lat, lng], { icon: evacuationIcon }).addTo(map);
+          currentMarkers.push(marker);
+
+          // Prepare popup content
+          let popupContent = `<b>${item.evacuationName || "Evacuation Center"}</b><br/>`;
+          
+          // Add status with colored indicator
+          if (item.status) {
+            popupContent += `<div style="display: flex; align-items: center; margin: 5px 0;">
+              <span class="status-indicator ${statusText.toLowerCase()}"></span>
+              <b>Status:</b> ${item.status}
+            </div>`;
+          }
+          
+          if (item.evacuationCapacity) {
+            popupContent += `<b>Capacity:</b> ${item.currentEvacuation || 0}/${item.evacuationCapacity}<br/>`;
+          }
+          
+          if (item.availableCapacity) {
+            popupContent += `<b>Available:</b> ${item.availableCapacity} spots<br/>`;
+          }
+          
+          if (item.contactPerson?.name) {
+            popupContent += `<b>Contact:</b> ${item.contactPerson.name}<br/>`;
+            if (item.contactPerson.contactNumber) {
+              popupContent += `<small>${item.contactPerson.contactNumber}</small>`;
+            }
+          }
+
+          marker.bindPopup(popupContent);
+
+          // Add circle showing capacity radius (if available)
+          if (item.evacuationCapacity) {
+            const radius = item.evacuationCapacity * 0.5; // Adjust multiplier as needed
+            L.circle([lat, lng], {
+              color: houseColor,
+              fillColor: houseColor,
+              fillOpacity: 0.1,
+              radius: radius
+            }).addTo(map);
+          }
+
+          // Auto zoom to marker on click
+          marker.on("click", () => {
+            map.flyTo([lat, lng], 16, {
+              animate: true,
+              duration: 1.5,
+            });
+          });
+        });
+        
+        // Fit bounds to show all evacuation centers
+        if (evacuations.length > 0) {
+          const bounds = L.latLngBounds(
+            evacuations
+              .filter(item => item.location?.latitude && item.location?.longitude)
+              .map(item => [item.location.latitude, item.location.longitude])
+          );
+          map.fitBounds(bounds.pad(0.1));
+        }
+      }
+
+      // Function to update legend based on current view
+      function updateLegend() {
+        const legend = document.getElementById('legend');
+        if (!legend) return;
+        
+        if (currentView === "municipalities") {
+          legend.innerHTML = `
+            <div class="legend-header" style="color: #3b82f6;">Municipalities</div>
+            <div class="legend-items">
+              <div class="legend-item">
+                <div class="legend-color" style="background-color: #3b82f6;"></div>
+                <div class="legend-text">Municipality</div>
+              </div>
+            </div>
+          `;
+        } else {
+          legend.innerHTML = `
+            <div class="legend-header" style="color: #f97316;">Evacuation Centers</div>
+            <div class="legend-items">
+              <div class="legend-item">
+                <div class="house-icon" style="transform: scale(0.7); margin-right: 4px;">
+                  <div class="house-roof"></div>
+                  <div class="house-body house-available"></div>
+                </div>
+                <div class="legend-text">Available</div>
+              </div>
+              <div class="legend-item">
+                <div class="house-icon" style="transform: scale(0.7); margin-right: 4px;">
+                  <div class="house-roof"></div>
+                  <div class="house-body house-high"></div>
+                </div>
+                <div class="legend-text">High</div>
+              </div>
+              <div class="legend-item">
+                <div class="house-icon" style="transform: scale(0.7); margin-right: 4px;">
+                  <div class="house-roof"></div>
+                  <div class="house-body house-full"></div>
+                </div>
+                <div class="legend-text">Full</div>
+              </div>
+              <div class="legend-item">
+                <div class="house-icon" style="transform: scale(0.7); margin-right: 4px;">
+                  <div class="house-roof"></div>
+                  <div class="house-body house-unknown"></div>
+                </div>
+                <div class="legend-text">Unknown</div>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      // Initialize the map
+      if (!map) {
+        map = L.map("map").setView([11.6, 124.45], 11);
+
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        // Create legend container
+        const legendContainer = document.createElement('div');
+        legendContainer.id = 'legend';
+        legendContainer.className = 'legend';
+        document.body.appendChild(legendContainer);
+        
+        // Initialize legend content
+        updateLegend();
+      }
+
+      // Listen for messages from React Native
+      document.addEventListener("message", function (event) {
+        try {
+          const data = JSON.parse(event.data);
+          currentView = data.view || "municipalities";
+          
+          if (currentView === "municipalities" && data.municipalities) {
+            addMunicipalityMarkers(data.municipalities);
+          } else if (currentView === "evacuations" && data.evacuations) {
+            addEvacuationMarkers(data.evacuations);
+          }
+          
+          // Update legend
+          updateLegend();
+          
+        } catch (error) {
+          console.error("Error parsing data:", error);
+        }
+      });
+    </script>
+  </body>
+</html>

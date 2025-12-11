@@ -1,0 +1,24 @@
+# Node modules (EAS server will install them)
+node_modules/
+
+# Expo & Metro cache / build dirs
+.expo/
+.expo-shared/
+metro-cache/
+android/build/
+ios/build/
+build/
+
+# IDEs / local configs
+.vscode/
+.idea/
+
+# Logs
+*.log
+*.log.*
+
+
+# Git
+.git/
+.gitignore
+.gitattributes
