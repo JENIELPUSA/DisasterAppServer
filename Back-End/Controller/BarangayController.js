@@ -81,13 +81,9 @@ exports.displayOneBarangay = AsyncErrorHandler(async (req, res) => {
 });
 
 // Update Barangay
-// Update Barangay
 exports.updateBarangay = AsyncErrorHandler(async (req, res) => {
   const id = req.params.id;
 
-  console.log("Data Pass", req.body);
-
-  // Find barangay by ID
   const barangay = await Barangay.findById(id);
   if (!barangay) {
     return res.status(404).json({
@@ -148,13 +144,13 @@ exports.deleteBarangay = AsyncErrorHandler(async (req, res) => {
 
 // Get Barangays for Dropdown
 exports.getBarangays = AsyncErrorHandler(async (req, res, next) => {
-  const barangays = await Barangay.find({ isActive: true })
-    .select('name code city province')
-    .sort({ name: 1 });
+  const data = await Barangay.find()
+    .select('barangayName')
+    .sort({ barangayName: 1 });
 
   res.status(200).json({
     success: true,
-    count: barangays.length,
-    data: barangays
+    count: data.length,
+    data
   });
 });

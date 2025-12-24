@@ -12,5 +12,11 @@ router
 router
   .route("/:id")
   .patch(authController.protect, HouseholdLeadController.updateHouseholdLead);
+router
+  .route("/DropdownAllHouseHold")
+  .get(HouseholdLeadController.DropdownAllHouseHold);
+router
+  .route("/barangay/:barangayId")
+  .get(authController.protect,HouseholdLeadController.getHouseholdLeadsByBarangayId);
 
 module.exports = router;

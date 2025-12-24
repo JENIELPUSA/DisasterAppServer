@@ -12,11 +12,15 @@ import DotIndicator from "../components/Carousels/DotIndicator";
 import NavigationButtons from "../components/Carousels/NavigationButton";
 import LoginForm from "../components/LoginForm";
 import { AuthContext } from "../contexts/AuthContext";
+import { HouseholdContext } from "../contexts/HouseholdLeadContext/HouseholdContext";
 import LoadingOverlay from "../ReusableComponent/LoadingOverlay";
+import { BarangayDisplayContext } from "../contexts/BrgyContext/BarangayContext";
 
 export default function LoginPage({ navigation }) {
+  const { isBarangaysDropdown } = useContext(BarangayDisplayContext);
   const { login, signup, checkEmailAvailability } = useContext(AuthContext); // Added signup and checkEmailAvailability
-
+  const { DropdowndataLead, fetchDropdownAllLead, loading } =
+    useContext(HouseholdContext);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -40,6 +44,8 @@ export default function LoginPage({ navigation }) {
       setIsLoading(false);
     }
   };
+
+  console.log("DropdowndataLead", DropdowndataLead);
 
   const carouselSlides = [
     {
@@ -137,7 +143,10 @@ export default function LoginPage({ navigation }) {
             password={password}
             setPassword={setPassword}
             handleLogin={handleLogin}
-            isLoading={isLoading}
+            fetchHouseholdLeadsForDropdown={fetchDropdownAllLead}
+            isloading={loading}
+            DropdowndataLead={DropdowndataLead}
+            BarangaysDropdownData={isBarangaysDropdown}
             slide={loginSlide}
             signup={signup} // PASS THE SIGNUP FUNCTION
             checkEmailAvailability={checkEmailAvailability} // PASS EMAIL CHECK FUNCTION

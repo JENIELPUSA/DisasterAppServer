@@ -59,8 +59,6 @@ export default function RegisterBarangayForm({
   useEffect(() => {
     if (visible) {
       if (isEditing && initialData) {
-        // Populate form with existing barangay data for editing
-        console.log("Populating form for editing:", initialData);
         setBarangayName(initialData.barangayName || "");
         setSelectedMunicipalityInternal(initialData.municipality || "");
         

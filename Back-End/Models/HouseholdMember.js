@@ -1,59 +1,69 @@
 // models/HouseholdMember.js
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const householdMemberSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: "UserLoginSchema",
     required: true,
-    unique: true
+    unique: true,
   },
-  
+
   // From your form
   householdLeadId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'HouseholdLead',
-    required: [true, 'Household lead is required']
+    ref: "HouseholdLead",
+    required: [true, "Household lead is required"],
   },
   relationship: {
     type: String,
-    required: [true, 'Relationship is required'],
+    required: [true, "Relationship is required"],
     enum: [
-      'Spouse', 'Child', 'Son', 'Daughter', 'Parent', 'Father', 'Mother',
-      'Sibling', 'Brother', 'Sister', 'Grandchild', 'Grandparent',
-      'Relative', 'Cousin', 'Nephew/Niece', 'Uncle/Aunt', 
-      'Other Family Member', 'Other'
-    ]
+      "Spouse",
+      "Child",
+      "Son",
+      "Daughter",
+      "Parent",
+      "Father",
+      "Mother",
+      "Sibling",
+      "Brother",
+      "Sister",
+      "Grandchild",
+      "Grandparent",
+      "Relative",
+      "Cousin",
+      "Nephew/Niece",
+      "Uncle/Aunt",
+      "Other Family Member",
+      "Other",
+    ],
   },
-  
-  // Household Information
-  householdAddress: {
-    type: String,
-    required: [true, 'Household address is required']
-  },
-  householdLeadName: {
-    type: String,
-    required: [true, 'Household lead name is required']
-  },
-  
-  // Status
-  isVerified: {
+  isApproved: {
     type: Boolean,
-    default: false
+    default: false,
+  },
+  isActive: {
+    type: Boolean,
+    default: false,
   },
   verificationCode: {
-    type: String
+    type: String,
   },
-  
-  // Timestamps
+  disability: {
+    type: String,
+  },
+  birthDate: {
+    type: Date,
+  },
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   updatedAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
-module.exports = mongoose.model('HouseholdMember', householdMemberSchema);
+module.exports = mongoose.model("HouseholdMember", householdMemberSchema);

@@ -1,60 +1,71 @@
 // models/HouseholdLead.js
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const householdLeadSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: "UserLoginSchema",
     required: true,
-    unique: true
+    unique: true,
   },
-  
-  // From your form
+  isActive: {
+    type: Boolean,
+    default: false,
+  },
   familyMembers: {
     type: Number,
-    required: [true, 'Number of family members is required'],
-    min: 1
+    required: [true, "Number of family members is required"],
+    min: 1,
   },
-  
+  barangayId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Barangay",
+  },
+
   // Household Information
   householdCode: {
     type: String,
-    unique: true
+    unique: true,
   },
   totalMembers: {
     type: Number,
-    default: 1 // Starts with 1 (the lead)
+    default: 1, // Starts with 1 (the lead)
   },
-  
+
   // Emergency Information
   emergencyContact: {
-    type: String
+    type: String,
   },
-  
+
   // Status
   isFull: {
     type: Boolean,
-    default: false
+    default: false,
   },
-  
+  location: {
+    latitude: { type: Number, required: true },
+    longitude: { type: Number, required: true }
+  },
+
   // Timestamps
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   updatedAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
 // Generate household code before saving
-householdLeadSchema.pre('save', function(next) {
+householdLeadSchema.pre("save", function (next) {
   if (!this.householdCode) {
     // Generate a unique household code (e.g., HH-123456)
-    this.householdCode = 'HH-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+    this.householdCode =
+      "HH-" + Math.random().toString(36).substr(2, 9).toUpperCase();
   }
   next();
 });
 
-module.exports = mongoose.model('HouseholdLead', householdLeadSchema);
+module.exports = mongoose.model("HouseholdLead", householdLeadSchema);

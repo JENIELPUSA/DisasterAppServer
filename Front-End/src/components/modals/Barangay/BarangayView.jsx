@@ -10,9 +10,12 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { EvacuationDisplayContext } from "../../../contexts/EvacuationContext/EvacuationContext";
+import { HouseholdContext } from "../../../contexts/HouseholdLeadContext/HouseholdContext";
+import { HouseHoldMemberContext } from "../../../contexts/HouseHoldMemberContext/HouseHoldMemberContext";
 import EvacuationForm from "./EvacuationForm";
 import EvacuationMapView from "./EvacuationMapView";
 import EvacuationListView from "./EvacuationListView";
+import HouseHold from "../HouseHold";
 
 const BarangayView = ({
   selectedMunicipality,
@@ -28,12 +31,19 @@ const BarangayView = ({
 }) => {
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedBarangay, setSelectedBarangay] = useState(null);
-
   const [showEvacuationView, setShowEvacuationView] = useState(false);
   const [evacuationData, setEvacuationData] = useState([]);
   const [evacuationSearch, setEvacuationSearch] = useState("");
+  const {
+    fetchHouseholdMembers,
+    householdMembers,
+    loading,
+    setLoading,
+    updateHouseholdMemberStatus
+  } = useContext(HouseHoldMemberContext);
   const { AddEvacuation, evacuations, updateEvacuation, deleteEvacuation } =
     useContext(EvacuationDisplayContext);
+  const { fetchHouseholdLeads, householdLeads } = useContext(HouseholdContext);
 
   const [showAddEvacuationForm, setShowAddEvacuationForm] = useState(false);
   const [showMapView, setShowMapView] = useState(false);
@@ -42,6 +52,9 @@ const BarangayView = ({
   const [selectedEvacuation, setSelectedEvacuation] = useState(null);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [editingEvacuation, setEditingEvacuation] = useState(null);
+
+  // State for household view
+  const [showHouseholdView, setShowHouseholdView] = useState(false);
 
   // Local state para sa search
   const [search, setSearch] = useState("");
@@ -279,10 +292,26 @@ const BarangayView = ({
     );
   };
 
-  const handleViewHousehold = () => {
-    if (selectedBarangay && onViewHousehold) {
-      setMenuVisible(false);
+  const handleViewHousehold = async () => {
+    if (!selectedBarangay) {
+      Alert.alert("Error", "No barangay selected");
+      return;
+    }
+
+    setMenuVisible(false);
+
+    try {
+      await fetchHouseholdLeads({ selectedBarangayId: selectedBarangay._id });
+    } catch (error) {
+      console.error("Error fetching household leads:", error);
+      // We can show an alert but still proceed.
+      Alert.alert("Warning", "Household data might not be up to date.");
+    }
+
+    if (onViewHousehold && typeof onViewHousehold === "function") {
       onViewHousehold(selectedBarangay);
+    } else {
+      setShowHouseholdView(true);
     }
   };
 
@@ -377,6 +406,31 @@ const BarangayView = ({
           </Text>
         </TouchableOpacity>
       </View>
+    );
+  }
+
+  // Render HouseHold component when household view is active
+  if (showHouseholdView && selectedBarangay) {
+    return (
+      <>
+        <HouseHold
+          selectedBarangay={selectedBarangay}
+          selectedMunicipality={selectedMunicipality}
+          onBack={() => setShowHouseholdView(false)}
+          householdLeads={householdLeads}
+          fetchHouseholdMembers={fetchHouseholdMembers}
+          householdMembers={householdMembers}
+          loading={loading}
+          setLoading={setLoading}
+          updateHouseholdMemberStatus={updateHouseholdMemberStatus}
+        />
+        <TouchableOpacity
+          className="absolute top-4 left-4 z-10 bg-white p-2 rounded-full shadow-md"
+          onPress={() => setShowHouseholdView(false)}
+        >
+          <MaterialIcons name="arrow-back" size={24} color="#4B5563" />
+        </TouchableOpacity>
+      </>
     );
   }
 

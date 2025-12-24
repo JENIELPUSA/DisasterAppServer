@@ -28,6 +28,7 @@ import ReportNasirangBahayModal from "../components/modals/ReportNasirangBahayMo
 import Barangay from "../components/modals/Barangay";
 import RegisterBarangayForm from "../components/RegisterBarangay";
 
+
 // Dummy Data
 import {
   analyticalReportsData,

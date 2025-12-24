@@ -1,11 +1,9 @@
 const UserLogin = require("../Models/LogInSchema");
-const Admin = require("../Models/AdminSchema");
 const AsyncErrorHandler = require("../Utils/AsyncErrorHandler");
 const streamifier = require("streamifier");
 const CustomError = require("../Utils/CustomError");
 const jwt = require("jsonwebtoken");
 const util = require("util");
-const User = require("../Models/UserModel");
 const Rescuer = require("../Models/Rescuer");
 const HouseholdLead = require("../Models/HouseholdLead");
 const BarangayCaptain = require("../Models/BarangayCaptain");
@@ -14,18 +12,14 @@ const HouseholdMember = require("../Models/HouseholdMember");
 const crypto = require("crypto");
 const sendEmail = require("./../Utils/email");
 const cloudinary = require("../Utils/cloudinary");
-const Organizer = require("../Models/OrganizerModel");
 const signToken = (id, role, linkId) => {
   return jwt.sign({ id, role, linkId }, process.env.SECRET_STR, {
     expiresIn: "12h",
   });
 };
 
-// Complete Registration with Role-Specific Data
 exports.signup = AsyncErrorHandler(async (req, res) => {
   try {
-    console.time("RegistrationProcess");
-
     const {
       // Common fields
       fullName,
@@ -34,7 +28,7 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
       contactNumber,
       address,
       role,
-      barangay,
+      barangayName,
 
       // Role-specific fields
       organization,
@@ -44,7 +38,24 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
       relationship,
       householdLeadName,
       householdAddress,
+      disability,
+      birthDate,
+      
+      // GPS coordinates for household_lead
+      latitude,
+      longitude,
+      gpsCoordinates,
+      emergencyContact,
     } = req.body;
+
+    console.log("➡ Backend received data:", { 
+      role,
+      barangayName,
+      latitude,
+      longitude,
+      gpsCoordinates,
+      familyMembers
+    });
 
     // Check if user already exists
     const existingUser = await UserLogin.findOne({ email });
@@ -56,9 +67,11 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
     }
 
     let avatar = null;
+
     if (req.file) {
       try {
         console.time("UploadAvatar");
+
         const uploadFromBuffer = (buffer) =>
           new Promise((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream(
@@ -76,6 +89,7 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
           public_id: uploadedResponse.public_id,
           url: uploadedResponse.secure_url,
         };
+
         console.timeEnd("UploadAvatar");
       } catch (uploadErr) {
         console.error("❌ Avatar upload failed:", uploadErr);
@@ -87,7 +101,7 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
       }
     }
 
-    // Map roles to their respective models
+    // Role model mapping
     const roleModelMap = {
       rescuer: Rescuer,
       household_lead: HouseholdLead,
@@ -113,7 +127,7 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
       address,
       role,
       barangay: ["household_lead", "brgy_captain"].includes(role)
-        ? barangay
+        ? barangayName
         : undefined,
       isVerified: true,
       avatar: avatar?.url || null,
@@ -121,9 +135,11 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
 
     let linkedRecord = null;
     let verificationCode = null;
+    let locationInfo = null; // Add this variable for location info
 
-    // Create role-specific profile
+    // ROLE SPECIFIC CREATION
     switch (role) {
+      // ------------------- RESCUER -------------------
       case "rescuer":
         linkedRecord = await Rescuer.create({
           userId: newUser._id,
@@ -134,58 +150,96 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
         });
         break;
 
+      // ------------------- HOUSEHOLD LEAD -------------------
       case "household_lead":
-        // Check if barangay exists
-        if (barangay) {
-          const barangayExists = await Barangay.findOne({
-            barangayName: barangay,
+        console.log("Creating household lead with data:", {
+          userId: newUser._id,
+          barangayName,
+          familyMembers,
+          latitude,
+          longitude,
+          gpsCoordinates,
+          emergencyContact
+        });
+
+        // Parse GPS coordinates
+        let lat, lng;
+        
+        if (latitude && longitude) {
+          lat = parseFloat(latitude);
+          lng = parseFloat(longitude);
+          console.log("Using separate lat/long:", lat, lng);
+        } else if (gpsCoordinates) {
+          // Parse "latitude,longitude" string
+          const coords = gpsCoordinates.split(',');
+          if (coords.length >= 2) {
+            lat = parseFloat(coords[0].trim());
+            lng = parseFloat(coords[1].trim());
+            console.log("Parsed from gpsCoordinates:", lat, lng);
+          }
+        }
+
+        // Check if valid coordinates
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+          await UserLogin.findByIdAndDelete(newUser._id);
+          return res.status(400).json({
+            success: false,
+            message: "Valid GPS coordinates (latitude and longitude) are required for household lead registration",
           });
+        }
+
+        // Check barangay if provided
+        let barangayId = null;
+        if (barangayName) {
+          const barangayExists = await Barangay.findById(barangayName);
           if (!barangayExists) {
-            await User.findByIdAndDelete(newUser._id);
+            await UserLogin.findByIdAndDelete(newUser._id);
             return res.status(400).json({
               success: false,
               message: "Barangay not found",
             });
           }
+          barangayId = barangayName;
         }
 
-        linkedRecord = await HouseholdLead.create({
+        // Create household lead with location
+        const householdLeadData = {
           userId: newUser._id,
-          familyMembers,
+          barangayId: barangayId,
+          familyMembers: parseInt(familyMembers) || 1,
+          emergencyContact: emergencyContact || contactNumber || "",
           totalMembers: 1,
-        });
+          location: {
+            latitude: lat,
+            longitude: lng
+          },
+          isActive: true
+        };
+
+        console.log("Creating HouseholdLead with data:", householdLeadData);
+        
+        linkedRecord = await HouseholdLead.create(householdLeadData);
+        console.log("Household lead created successfully:", linkedRecord._id);
+        
+        // Store location info for response
+        locationInfo = {
+          hasLocation: true,
+          coordinates: `${lat},${lng}`,
+          latitude: lat,
+          longitude: lng,
+          barangayId: barangayId
+        };
         break;
 
+      // ------------------- BARANGAY CAPTAIN -------------------
       case "brgy_captain":
         // Check if ID number already exists
         const existingCaptainId = await BarangayCaptain.findOne({ idNumber });
         if (existingCaptainId) {
-          await User.findByIdAndDelete(newUser._id);
+          await UserLogin.findByIdAndDelete(newUser._id);
           return res.status(400).json({
             success: false,
             message: "ID number already exists",
-          });
-        }
-
-        // Check if barangay already has a captain
-        const existingBarangayCaptain = await BarangayCaptain.findOne({
-          barangayName: barangay,
-        });
-        if (existingBarangayCaptain) {
-          await User.findByIdAndDelete(newUser._id);
-          return res.status(400).json({
-            success: false,
-            message: "Barangay already has a captain assigned",
-          });
-        }
-
-        // Check if barangay exists
-        const barangayExists = await Barangay.findOne({ barangayName: barangay });
-        if (!barangayExists) {
-          await User.findByIdAndDelete(newUser._id);
-          return res.status(400).json({
-            success: false,
-            message: "Barangay not found",
           });
         }
 
@@ -193,41 +247,39 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
           userId: newUser._id,
           idNumber,
           organization,
-          barangayName: barangay,
+          barangayName: barangayName,
           termStart: new Date(),
         });
 
-        // Update barangay with captain
-        await Barangay.findOneAndUpdate(
-          { name: barangay },
-          { $set: { barangayCaptainId: linkedRecord._id } }
-        );
+        // Assign captain to Barangay
+        await Barangay.findByIdAndUpdate(barangayName, {
+          $set: { barangayCaptainId: linkedRecord._id },
+        });
+
         break;
 
+      // ------------------- HOUSEHOLD MEMBER -------------------
       case "household_member":
-        // Check if household lead exists
         const householdLead = await HouseholdLead.findById(householdLeadId);
         if (!householdLead) {
-          await User.findByIdAndDelete(newUser._id);
+          await UserLogin.findByIdAndDelete(newUser._id);
           return res.status(404).json({
             success: false,
             message: "Household lead not found",
           });
         }
 
-        // Check if household is full
         if (
           householdLead.isFull ||
           householdLead.totalMembers >= householdLead.familyMembers
         ) {
-          await User.findByIdAndDelete(newUser._id);
+          await UserLogin.findByIdAndDelete(newUser._id);
           return res.status(400).json({
             success: false,
             message: "Household is full",
           });
         }
 
-        // Generate verification code
         verificationCode = Math.random()
           .toString(36)
           .substr(2, 6)
@@ -237,20 +289,19 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
           userId: newUser._id,
           householdLeadId,
           relationship,
-          householdAddress,
           householdLeadName,
           verificationCode,
+          disability,
+          birthDate,
           isVerified: false,
         });
 
-        // Update household lead member count
         await HouseholdLead.findByIdAndUpdate(householdLeadId, {
           $inc: { totalMembers: 1 },
           isFull: householdLead.totalMembers + 1 >= householdLead.familyMembers,
         });
 
-        // Send verification email to household lead
-        const leadUser = await User.findById(householdLead.userId);
+        const leadUser = await UserLogin.findById(householdLead.userId);
         if (leadUser) {
           await sendEmail({
             email: leadUser.email,
@@ -258,29 +309,30 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
             text: `A new member (${fullName}) has registered under your household.\nRelationship: ${relationship}\nVerification Code: ${verificationCode}`,
           });
         }
+
         break;
 
       default:
-        await User.findByIdAndDelete(newUser._id);
+        await UserLogin.findByIdAndDelete(newUser._id);
         return res.status(400).json({
           success: false,
           message: "Invalid role",
         });
     }
 
-    // Update user with linkedId
+    // Link profile record
     newUser.linkedId = linkedRecord._id;
     await newUser.save();
 
     // Generate token
     const token = signToken(newUser._id, newUser.role, linkedRecord._id);
 
-    // Send welcome email
+    // Send welcome email (optional)
     try {
       await sendEmail({
         email: newUser.email,
         subject: "Welcome to Emergency Response System",
-        text: `Welcome ${fullName}!\n\nYour account has been created successfully.\n\nRole: ${role}\n\nYou can now login to the system using your email and password.`,
+        text: `Welcome ${fullName}! Your account has been created.\nRole: ${role}`,
       });
     } catch (emailErr) {
       console.warn("Failed to send welcome email:", emailErr);
@@ -288,6 +340,7 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
 
     console.timeEnd("RegistrationProcess");
 
+    // Prepare response data
     const response = {
       success: true,
       message: "Registration completed successfully",
@@ -298,13 +351,21 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
           email: newUser.email,
           role: newUser.role,
           linkedId: linkedRecord._id,
+          contactNumber: newUser.contactNumber,
+          address: newUser.address,
+          avatar: newUser.avatar,
         },
         roleProfile: linkedRecord,
         token,
       },
     };
 
-    // Add verification info for household members
+    // Add location info for household_lead
+    if (role === "household_lead" && locationInfo) {
+      response.data.locationInfo = locationInfo;
+      response.message = "Household lead registration successful with GPS location.";
+    }
+
     if (role === "household_member") {
       response.message =
         "Registration completed. Awaiting verification from household lead.";
@@ -314,6 +375,32 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
     return res.status(201).json(response);
   } catch (error) {
     console.error("Registration Error:", error);
+    
+    // Handle validation errors specifically
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => ({
+        field: err.path,
+        message: err.message
+      }));
+      
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors,
+        error: error.message
+      });
+    }
+    
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({
+        success: false,
+        message: `Duplicate value for ${field}. Please use a different value.`,
+        error: error.message
+      });
+    }
+    
     return res.status(500).json({
       success: false,
       message: "Something went wrong during registration.",
@@ -321,26 +408,6 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
     });
   }
 });
-
-const createSendResponse = (user, statusCode, res) => {
-  const token = signToken(user._id);
-
-  const options = {
-    maxAge: process.env.LOGIN_EXPR,
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-  };
-
-  res.cookie("jwt", token, options);
-  user.password = undefined;
-
-  res.status(statusCode).json({
-    status: "success",
-    token,
-    data: { user },
-  });
-};
-
 
 exports.login = AsyncErrorHandler(async (req, res, next) => {
   const { email, password } = req.body;
@@ -396,7 +463,6 @@ exports.login = AsyncErrorHandler(async (req, res, next) => {
     theme: user.theme,
   });
 });
-
 
 exports.logout = AsyncErrorHandler((req, res, next) => {
   req.session.destroy((err) => {

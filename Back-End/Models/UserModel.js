@@ -35,16 +35,6 @@ const userSchema = new mongoose.Schema({
     enum: ['rescuer', 'household_lead', 'brgy_captain', 'household_member'],
     required: [true, 'Role is required']
   },
-  
-  // Common Fields
-  barangay: {
-    type: String,
-    required: function() {
-      // Barangay is required for certain roles
-      return ['household_lead', 'brgy_captain'].includes(this.role);
-    }
-  },
-  
   // Status
   isActive: {
     type: Boolean,

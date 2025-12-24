@@ -16,6 +16,7 @@ const Organizer = require("./Routes/OrganizerRoute");
 const Evacuation = require("./Routes/EvacuationRoute");
 const Barangay = require("./Routes/BarangayRoute");
 const HouseholdLead = require("./Routes/HouseholdLead");
+const HouseholdMember = require("./Routes/HouseholdRoute")
 
 let app = express();
 
@@ -71,6 +72,9 @@ app.use("/api/v1/Organizer", Organizer);
 app.use("/api/v1/Evacuation", Evacuation);
 app.use("/api/v1/Barangay", Barangay);
 app.use("/api/v1/HouseholdLead", HouseholdLead);
+app.use("/api/v1/HouseholdMember", HouseholdMember);
+
+
 
 app.use(ErrorController);
 

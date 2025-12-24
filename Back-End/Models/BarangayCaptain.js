@@ -1,48 +1,48 @@
 // models/BarangayCaptain.js
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const barangayCaptainSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: "User",
     required: true,
-    unique: true
+    unique: true,
   },
-  
+
   // From your form
   idNumber: {
     type: String,
-    required: [true, 'Official ID number is required'],
-    unique: true
+    required: [true, "Official ID number is required"],
+    unique: true,
   },
   organization: {
     type: String,
-    required: [true, 'Contact person for emergency is required']
+    required: [true, "Contact person for emergency is required"],
   },
-  
+
   // Barangay Information
   barangayName: {
-    type: String,
-    required: [true, 'Barangay name is required']
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Barangay",
   },
-  
+
   // Additional fields
   termStart: {
-    type: Date
+    type: Date,
   },
   termEnd: {
-    type: Date
+    type: Date,
   },
-  
+
   // Timestamps
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   updatedAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
-module.exports = mongoose.model('BarangayCaptain', barangayCaptainSchema);
+module.exports = mongoose.model("BarangayCaptain", barangayCaptainSchema);

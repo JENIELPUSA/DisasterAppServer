@@ -13,5 +13,8 @@ router
   .route("/:id")
   .delete(authController.protect, BarangayController.deleteBarangay)
   .patch(authController.protect, BarangayController.updateBarangay);
+router
+  .route("/BarangayDropdown")
+  .get(BarangayController.getBarangays);
 
 module.exports = router;

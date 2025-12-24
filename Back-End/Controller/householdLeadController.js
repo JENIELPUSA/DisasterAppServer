@@ -1,8 +1,10 @@
 // controllers/householdLeadController.js
-const HouseholdLead = require('../Models/HouseholdLead');
-const User = require('../Models/UserModel');
-const HouseholdMember = require('../Models/HouseholdMember');
+const HouseholdLead = require("../Models/HouseholdLead");
+const User = require("../Models/UserModel");
+const HouseholdMember = require("../Models/HouseholdMember");
 const AsyncErrorHandler = require("../Utils/AsyncErrorHandler");
+const mongoose = require("mongoose");
+
 // Create household lead profile
 exports.createHouseholdLead = async (req, res) => {
   try {
@@ -10,10 +12,10 @@ exports.createHouseholdLead = async (req, res) => {
 
     // Check if user exists and has household_lead role
     const user = await User.findById(userId);
-    if (!user || user.role !== 'household_lead') {
+    if (!user || user.role !== "household_lead") {
       return res.status(400).json({
         success: false,
-        message: 'User not found or incorrect role'
+        message: "User not found or incorrect role",
       });
     }
 
@@ -22,7 +24,7 @@ exports.createHouseholdLead = async (req, res) => {
     if (existingHouseholdLead) {
       return res.status(400).json({
         success: false,
-        message: 'Household lead profile already exists for this user'
+        message: "Household lead profile already exists for this user",
       });
     }
 
@@ -31,65 +33,82 @@ exports.createHouseholdLead = async (req, res) => {
       userId,
       familyMembers,
       emergencyContact,
-      totalMembers: 1 // Start with 1 (the lead)
+      totalMembers: 1, // Start with 1 (the lead)
     });
 
     await newHouseholdLead.save();
 
     // Populate user details
-    const populatedHouseholdLead = await HouseholdLead.findById(newHouseholdLead._id)
-      .populate('userId', 'fullName email contactNumber address barangay');
+    const populatedHouseholdLead = await HouseholdLead.findById(
+      newHouseholdLead._id
+    ).populate("userId", "fullName email contactNumber address barangay");
 
     res.status(201).json({
       success: true,
-      message: 'Household lead profile created successfully',
-      data: populatedHouseholdLead
+      message: "Household lead profile created successfully",
+      data: populatedHouseholdLead,
     });
   } catch (error) {
-    console.error('Create household lead error:', error);
+    console.error("Create household lead error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: "Server error",
+      error: error.message,
     });
   }
 };
 
-// Get household lead by user ID
-exports.getHouseholdLeadByUserId = async (req, res) => {
+// Get household leads by barangayId
+exports.getHouseholdLeadsByBarangayId = async (req, res) => {
   try {
-    const userId = req.params.userId || req.user.userId;
+    const { barangayId } = req.params; // or req.query.barangayId
 
-    const householdLead = await HouseholdLead.findOne({ userId })
-      .populate('userId', 'fullName email contactNumber address barangay');
-
-    if (!householdLead) {
-      return res.status(404).json({
+    if (!barangayId) {
+      return res.status(400).json({
         success: false,
-        message: 'Household lead profile not found'
+        message: "barangayId is required",
       });
     }
 
-    // Get household members
-    const householdMembers = await HouseholdMember.find({ householdLeadId: householdLead._id })
-      .populate('userId', 'fullName email contactNumber');
+    // Get household leads in the barangay
+    const householdLeads = await HouseholdLead.find({ barangayId })
+      .populate("userId", "fullName email contactNumber address barangay");
+
+    if (!householdLeads.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No household leads found for this barangay",
+      });
+    }
+
+    // Get members per household lead
+    const leadsWithMembers = await Promise.all(
+      householdLeads.map(async (lead) => {
+        const members = await HouseholdMember.find({
+          householdLeadId: lead._id,
+        }).populate("userId", "fullName email contactNumber");
+
+        return {
+          ...lead.toObject(),
+          members,
+        };
+      })
+    );
 
     res.status(200).json({
       success: true,
-      data: {
-        ...householdLead.toObject(),
-        members: householdMembers
-      }
+      data: leadsWithMembers,
     });
   } catch (error) {
-    console.error('Get household lead error:', error);
+    console.error("Get household leads by barangay error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: "Server error",
+      error: error.message,
     });
   }
 };
+
 
 // Update household lead profile
 exports.updateHouseholdLead = async (req, res) => {
@@ -102,7 +121,7 @@ exports.updateHouseholdLead = async (req, res) => {
     if (!householdLead) {
       return res.status(404).json({
         success: false,
-        message: 'Household lead profile not found'
+        message: "Household lead profile not found",
       });
     }
 
@@ -121,72 +140,94 @@ exports.updateHouseholdLead = async (req, res) => {
       { userId },
       { $set: updateData },
       { new: true, runValidators: true }
-    ).populate('userId', 'fullName email contactNumber address barangay');
+    ).populate("userId", "fullName email contactNumber address barangay");
 
     res.status(200).json({
       success: true,
-      message: 'Household lead profile updated successfully',
-      data: updatedHouseholdLead
+      message: "Household lead profile updated successfully",
+      data: updatedHouseholdLead,
     });
   } catch (error) {
-    console.error('Update household lead error:', error);
+    console.error("Update household lead error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: "Server error",
+      error: error.message,
     });
   }
 };
 
-// Get all household leads (for dropdown)
 exports.getAllHouseholdLeads = async (req, res) => {
   try {
-    const { barangay, isFull } = req.query;
-    
-    // Build filter for users
-    let userFilter = { role: 'household_lead', isActive: true };
-    if (barangay) userFilter.barangay = barangay;
+    const { barangayId } = req.query;
 
-    // Get users with household_lead role
-    const householdLeadUsers = await User.find(userFilter).select('_id fullName email contactNumber address barangay');
-    
-    const userIds = householdLeadUsers.map(user => user._id);
+    const pipeline = [];
 
-    // Get household leads for these users
-    let householdLeadFilter = { userId: { $in: userIds } };
-    if (isFull !== undefined) {
-      householdLeadFilter.isFull = isFull === 'true';
+    // Filter by barangayId if provided
+    if (barangayId && mongoose.Types.ObjectId.isValid(barangayId)) {
+      pipeline.push({
+        $match: { barangayId: new mongoose.Types.ObjectId(barangayId) }
+      });
     }
 
-    const householdLeads = await HouseholdLead.find(householdLeadFilter)
-      .populate('userId', 'fullName email contactNumber address barangay')
-      .sort({ createdAt: -1 });
-
-    // Combine user info with household lead info
-    const result = householdLeads.map(lead => {
-      const user = householdLeadUsers.find(u => u._id.toString() === lead.userId.toString());
-      return {
-        id: lead._id,
-        name: user?.fullName || 'Unknown',
-        address: user?.address || 'Unknown',
-        contact: user?.contactNumber || 'Unknown',
-        members: lead.totalMembers || 0,
-        barangay: user?.barangay || 'Unknown',
-        isFull: lead.isFull,
-        householdCode: lead.householdCode
-      };
+    // Lookup user info
+    pipeline.push({
+      $lookup: {
+        from: "userloginschemas",
+        localField: "userId",
+        foreignField: "_id",
+        as: "userInfo"
+      }
     });
+    pipeline.push({
+      $unwind: { path: "$userInfo", preserveNullAndEmptyArrays: true }
+    });
+
+    // Lookup barangay info
+    pipeline.push({
+      $lookup: {
+        from: "barangays",
+        localField: "barangayId",
+        foreignField: "_id",
+        as: "barangayInfo"
+      }
+    });
+    pipeline.push({
+      $unwind: { path: "$barangayInfo", preserveNullAndEmptyArrays: true }
+    });
+
+    // Project final fields
+    pipeline.push({
+      $project: {
+        id: "$_id",
+        householdCode: 1,
+        createdAt: 1,
+        userId: { $ifNull: ["$userInfo._id", "Not Available"] },
+        fullName: { $ifNull: ["$userInfo.fullName", "Not Available"] },
+        contactNumber: { $ifNull: ["$userInfo.contactNumber", "Not Available"] },
+        address: { $ifNull: ["$barangayInfo.fullAddress", "Not Available"] },
+        barangay: { $ifNull: ["$barangayInfo.barangayName", "Not Available"] },
+        familyMembers: { $ifNull: ["$familyMembers", 0] }
+      }
+    });
+
+    // Sort latest first
+    pipeline.push({ $sort: { createdAt: -1 } });
+
+    // Execute aggregation
+    const data = await HouseholdLead.aggregate(pipeline);
 
     res.status(200).json({
       success: true,
-      count: result.length,
-      data: result
+      count: data.length,
+      data
     });
+
   } catch (error) {
-    console.error('Get all household leads error:', error);
+    console.error("Get Household Leads Error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error',
+      message: "Server Error",
       error: error.message
     });
   }
@@ -196,25 +237,28 @@ exports.getAllHouseholdLeads = async (req, res) => {
 exports.searchHouseholdLeads = async (req, res) => {
   try {
     const { search, barangay } = req.query;
-    
+
     // Search users by name
     let userFilter = {
-      role: 'household_lead',
+      role: "household_lead",
       isActive: true,
-      fullName: { $regex: search, $options: 'i' }
+      fullName: { $regex: search, $options: "i" },
     };
-    
+
     if (barangay) userFilter.barangay = barangay;
 
-    const users = await User.find(userFilter).select('_id fullName email contactNumber address barangay');
-    
-    const userIds = users.map(user => user._id);
+    const users = await User.find(userFilter).select(
+      "_id fullName email contactNumber address barangay"
+    );
+
+    const userIds = users.map((user) => user._id);
 
     // Get household leads for these users
-    const householdLeads = await HouseholdLead.find({ userId: { $in: userIds } })
-      .populate('userId', 'fullName email contactNumber address barangay');
+    const householdLeads = await HouseholdLead.find({
+      userId: { $in: userIds },
+    }).populate("userId", "fullName email contactNumber address barangay");
 
-    const result = householdLeads.map(lead => ({
+    const result = householdLeads.map((lead) => ({
       id: lead._id,
       name: lead.userId.fullName,
       address: lead.userId.address,
@@ -222,20 +266,20 @@ exports.searchHouseholdLeads = async (req, res) => {
       members: lead.totalMembers,
       barangay: lead.userId.barangay,
       isFull: lead.isFull,
-      householdCode: lead.householdCode
+      householdCode: lead.householdCode,
     }));
 
     res.status(200).json({
       success: true,
       count: result.length,
-      data: result
+      data: result,
     });
   } catch (error) {
-    console.error('Search household leads error:', error);
+    console.error("Search household leads error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error',
-      error: error.message
+      message: "Server error",
+      error: error.message,
     });
   }
 };
@@ -243,45 +287,105 @@ exports.searchHouseholdLeads = async (req, res) => {
 // Get Household Leads for Dropdown
 exports.getHouseholdLeads = AsyncErrorHandler(async (req, res, next) => {
   const { barangay, search } = req.query;
-  
+
   // Build query
-  let userQuery = { role: 'household_lead', isActive: true };
+  let userQuery = { role: "household_lead", isActive: true };
   if (barangay) userQuery.barangay = barangay;
   if (search) {
     userQuery.$or = [
-      { fullName: { $regex: search, $options: 'i' } },
-      { email: { $regex: search, $options: 'i' } }
+      { fullName: { $regex: search, $options: "i" } },
+      { email: { $regex: search, $options: "i" } },
     ];
   }
 
-  const householdLeadUsers = await User.find(userQuery)
-    .select('_id fullName email contactNumber address barangay');
-  
-  const userIds = householdLeadUsers.map(user => user._id);
+  const householdLeadUsers = await User.find(userQuery).select(
+    "_id fullName email contactNumber address barangay"
+  );
 
-  const householdLeads = await HouseholdLead.find({ userId: { $in: userIds } })
-    .select('familyMembers totalMembers householdCode isFull');
+  const userIds = householdLeadUsers.map((user) => user._id);
+
+  const householdLeads = await HouseholdLead.find({
+    userId: { $in: userIds },
+  }).select("familyMembers totalMembers householdCode isFull");
 
   // Combine data
-  const result = householdLeads.map(lead => {
-    const user = householdLeadUsers.find(u => u._id.toString() === lead.userId.toString());
+  const result = householdLeads.map((lead) => {
+    const user = householdLeadUsers.find(
+      (u) => u._id.toString() === lead.userId.toString()
+    );
     return {
       id: lead._id,
-      name: user?.fullName || 'Unknown',
-      email: user?.email || 'Unknown',
-      address: user?.address || 'Unknown',
-      contact: user?.contactNumber || 'Unknown',
-      barangay: user?.barangay || 'Unknown',
+      name: user?.fullName || "Unknown",
+      email: user?.email || "Unknown",
+      address: user?.address || "Unknown",
+      contact: user?.contactNumber || "Unknown",
+      barangay: user?.barangay || "Unknown",
       members: lead.totalMembers || 0,
       maxMembers: lead.familyMembers || 0,
       isFull: lead.isFull,
-      householdCode: lead.householdCode
+      householdCode: lead.householdCode,
     };
   });
 
   res.status(200).json({
     success: true,
     count: result.length,
-    data: result
+    data: result,
   });
 });
+
+exports.DropdownAllHouseHold = async (req, res) => {
+  try {
+    const { barangay } = req.query; // Barangay ID from query
+    if (!barangay) {
+      return res.status(400).json({
+        success: false,
+        message: "Barangay ID is required",
+      });
+    }
+
+    const householdLeads = await HouseholdLead.aggregate([
+      // Lookup user details
+      {
+        $lookup: {
+          from: "userloginschemas", // collection name sa MongoDB
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" }, // flatten user array
+
+      // Filter by barangayId in HouseholdLead
+      {
+        $match: {
+          barangayId: new mongoose.Types.ObjectId(barangay),
+        },
+      },
+
+      // Project only needed fields
+      {
+        $project: {
+          id: "$_id",
+          name: "$user.fullName",
+          address: "$user.address",
+          contact: "$user.contactNumber",
+        },
+      },
+      { $sort: { createdAt: -1 } },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      count: householdLeads.length,
+      data: householdLeads,
+    });
+  } catch (error) {
+    console.error("Get all household leads error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};

@@ -22,7 +22,7 @@ export const BarangayDisplayProvider = ({ children }) => {
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(false);
   const backendUrl = Constants.expoConfig.extra.apiUrl; // Expo environment variable
-
+  const [isBarangaysDropdown, setBarangaysDropdown] = useState();
   // -----------------------------
   // Centralized error handler
   // -----------------------------
@@ -41,8 +41,7 @@ export const BarangayDisplayProvider = ({ children }) => {
       try {
         setLoading(true);
 
-       const searchText = (search ?? "").toString().trim();
-
+        const searchText = (search ?? "").toString().trim();
 
         const params = {};
         if (searchText) params.search = searchText;
@@ -76,16 +75,56 @@ export const BarangayDisplayProvider = ({ children }) => {
     [authToken] // only depend on authToken
   );
 
-  // -----------------------------
-  // Debounce search/filter changes
-  // -----------------------------
+  const FetchBarangayDropdown = useCallback(
+    async (search = "", page = 1) => {
+      try {
+        setLoading(true);
+
+        const searchText = (search ?? "").toString().trim();
+
+        const params = {};
+        if (searchText) params.search = searchText;
+        if (page) params.page = page;
+
+        const res = await axios.get(
+          `${backendUrl}/api/v1/Barangay/BarangayDropdown`,
+          {
+            params,
+            headers: {
+              "Cache-Control": "no-cache", // prevent 304
+            },
+          }
+        );
+
+        const {
+          data,
+          totalItems,
+          currentPage: resCurrentPage,
+          totalPages: resTotalPages,
+        } = res.data;
+
+        setBarangaysDropdown(data || []);
+        setTotalBarangays(totalItems || 0);
+        setCurrentPage(resCurrentPage || page);
+        setTotalPages(resTotalPages || 1);
+      } catch (error) {
+        handleError(error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [] 
+  );
+
+
   useEffect(() => {
     const timeout = setTimeout(() => {
       fetchBarangays(1);
+      FetchBarangayDropdown();
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [search, dateFrom, dateTo, fetchBarangays]);
+  }, [search, dateFrom, dateTo, fetchBarangays, FetchBarangayDropdown]);
 
   const addBarangay = async (values) => {
     try {
@@ -222,6 +261,7 @@ export const BarangayDisplayProvider = ({ children }) => {
         updateBarangay,
         toggleBarangayStatus,
         getBarangay,
+        isBarangaysDropdown,
       }}
     >
       {children}

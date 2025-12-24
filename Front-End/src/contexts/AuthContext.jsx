@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from "expo-image-picker";
 import { Alert } from "react-native";
 
 export const AuthContext = createContext();
@@ -31,18 +31,26 @@ export const AuthProvider = ({ children }) => {
     const loadData = async () => {
       try {
         const keys = [
-          "token", "role", "email", "first_name", "last_name", 
-          "contact_number", "userId", "linkId", "Designatedzone", 
-          "theme", "avatar"
+          "token",
+          "role",
+          "email",
+          "first_name",
+          "last_name",
+          "contact_number",
+          "userId",
+          "linkId",
+          "Designatedzone",
+          "theme",
+          "avatar",
         ];
         const values = await AsyncStorage.multiGet(keys);
-        
-        console.log('Loaded values:', values);
+
+        console.log("Loaded values:", values);
 
         values.forEach(([key, value]) => {
-          if (value !== null && value !== 'null' && value !== '') {
+          if (value !== null && value !== "null" && value !== "") {
             console.log(`Setting ${key}:`, value);
-            
+
             switch (key) {
               case "token":
                 setAuthToken(value);
@@ -83,12 +91,14 @@ export const AuthProvider = ({ children }) => {
 
             // Set axios header if token
             if (key === "token" && value) {
-              axios.defaults.headers.common["Authorization"] = `Bearer ${value}`;
+              axios.defaults.headers.common[
+                "Authorization"
+              ] = `Bearer ${value}`;
             }
           }
         });
       } catch (error) {
-        console.error('Error loading data from storage:', error);
+        console.error("Error loading data from storage:", error);
       } finally {
         setIsLoading(false);
       }
@@ -109,9 +119,13 @@ export const AuthProvider = ({ children }) => {
   const pickImage = async () => {
     try {
       // Request permissions
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to select an image.');
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Sorry, we need camera roll permissions to select an image."
+        );
         return null;
       }
 
@@ -128,200 +142,300 @@ export const AuthProvider = ({ children }) => {
         return {
           uri: result.assets[0].uri,
           base64: result.assets[0].base64,
-          type: result.assets[0].mimeType || 'image/jpeg',
-          fileName: result.assets[0].fileName || 'avatar.jpg'
+          type: result.assets[0].mimeType || "image/jpeg",
+          fileName: result.assets[0].fileName || "avatar.jpg",
         };
       }
       return null;
     } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image');
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to pick image");
       return null;
     }
   };
 
-  // Signup function
-  const signup = async (formData) => {
-    try {
-      console.log('Starting signup process...');
+// Signup function
+const signup = async (formData) => {
+  try {
+    console.log("Starting signup process...");
+    console.log("formData", formData);
+    console.log("Role:", formData.role);
+    console.log("GPS Data for household_lead:", { 
+      latitude: formData.latitude, 
+      longitude: formData.longitude,
+      gpsCoordinates: formData.gpsCoordinates,
+      barangay: formData.barangay
+    });
 
-      console.log("formData",formData)
-      
-      // Create FormData object for multipart/form-data
-      const data = new FormData();
-      
-      // Append common fields
-      data.append('fullName', formData.fullName);
-      data.append('email', formData.email);
-      data.append('password', formData.password);
-      data.append('contactNumber', formData.contactNumber);
-      data.append('address', formData.address);
-      data.append('role', formData.role);
-      
-      // Append role-specific fields
-      switch(formData.role) {
-        case 'rescuer':
-          data.append('organization', formData.organization);
-          data.append('idNumber', formData.idNumber);
-          break;
-          
-        case 'household_lead':
-          data.append('barangay', formData.barangay);
-          data.append('familyMembers', formData.familyMembers.toString());
-          break;
-          
-        case 'brgy_captain':
-          data.append('barangay', formData.barangay);
-          data.append('idNumber', formData.idNumber);
-          data.append('organization', formData.organization || 'Barangay');
-          break;
-          
-        case 'household_member':
-          data.append('householdLeadId', formData.householdLeadId);
-          data.append('relationship', formData.relationship);
-          data.append('householdLeadName', formData.householdLeadName);
-          data.append('householdAddress', formData.householdAddress);
-          break;
-          
-        default:
-          return {
-            success: false,
-            message: 'Invalid role selected'
-          };
-      }
-      
-      // Append avatar if exists
-      if (formData.avatar) {
-        data.append('avatar', {
-          uri: formData.avatar.uri,
-          type: formData.avatar.type || 'image/jpeg',
-          name: formData.avatar.fileName || 'avatar.jpg'
+    // Create FormData object for multipart/form-data
+    const data = new FormData();
+
+    // Append common fields
+    data.append("fullName", formData.fullName);
+    data.append("email", formData.email);
+    data.append("password", formData.password);
+    data.append("contactNumber", formData.contactNumber);
+    data.append("address", formData.address || "");
+    data.append("role", formData.role);
+
+    // Append role-specific fields
+    switch (formData.role) {
+      case "rescuer":
+        data.append("organization", formData.organization);
+        data.append("idNumber", formData.idNumber);
+        break;
+
+      case "household_lead":
+        // Barangay - dapat ObjectId kung ID, string kung name
+        if (formData.barangay) {
+          console.log("Appending barangayName for household_lead:", formData.barangay);
+          data.append("barangayName", formData.barangay);
+        }
+        
+        // Family members (required)
+        data.append("familyMembers", formData.familyMembers ? formData.familyMembers.toString() : "1");
+        
+        // GPS COORDINATES - REQUIRED FOR HOUSEHOLD LEAD
+        console.log("Checking GPS data for household_lead:", {
+          hasLatLong: !!(formData.latitude && formData.longitude),
+          hasGpsCoordinates: !!formData.gpsCoordinates,
+          latitude: formData.latitude,
+          longitude: formData.longitude,
+          gpsCoordinates: formData.gpsCoordinates
         });
-      }
-      
-      // Make the signup request
-      const res = await axios.post(
-        `${apiUrl}/api/v1/authentication/signup`,
-        data,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          withCredentials: true
-        }
-      );
-      
-      console.log('Signup response:', res.data);
-      
-      if (res.data.success) {
-        const { 
-          token, 
-          user, 
-          roleProfile, 
-          verificationRequired 
-        } = res.data.data;
         
-        // Split fullName into first and last name
-        const nameParts = user.fullName.split(' ');
-        const first_name = nameParts[0];
-        const last_name = nameParts.slice(1).join(' ');
-        
-        // Prepare data for AsyncStorage
-        const storageData = [
-          ["token", safeValue(token)],
-          ["role", safeValue(user.role)],
-          ["email", safeValue(user.email)],
-          ["first_name", safeValue(first_name)],
-          ["last_name", safeValue(last_name)],
-          ["contact_number", safeValue(formData.contactNumber)],
-          ["userId", safeValue(user._id)],
-          ["linkId", safeValue(user.linkedId)],
-          ["Designatedzone", safeValue(formData.barangay || "")],
-          ["theme", safeValue("light")],
-          ["avatar", safeValue(user.avatar || "")],
-        ];
-        
-        await AsyncStorage.multiSet(storageData);
-        
-        setRole(user.role || "");
-        setEmail(user.email || "");
-        setFirstName(first_name || "");
-        setLastName(last_name || "");
-        setContactNumber(formData.contactNumber || "");
-        setUserID(user._id || "");
-        setLinkId(user.linkedId || "");
-        setDesignatedzone(formData.barangay || "");
-        setAvatar(user.avatar || null);
-        
-        // Set axios header
-        if (token) {
-          axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-        }
-        
-        return {
-          success: true,
-          message: res.data.message,
-          verificationRequired: verificationRequired || false,
-          data: {
-            user,
-            roleProfile,
-            token
+        // Priority 1: Separate latitude and longitude
+        if (formData.latitude && formData.longitude) {
+          console.log("Appending separate lat/long:", formData.latitude, formData.longitude);
+          data.append("latitude", formData.latitude.toString());
+          data.append("longitude", formData.longitude.toString());
+        } 
+        // Priority 2: gpsCoordinates string
+        else if (formData.gpsCoordinates) {
+          console.log("Parsing gpsCoordinates string:", formData.gpsCoordinates);
+          const coords = formData.gpsCoordinates.split(',');
+          if (coords.length >= 2) {
+            const lat = coords[0].trim();
+            const lng = coords[1].trim();
+            console.log("Parsed coordinates:", lat, lng);
+            data.append("latitude", lat);
+            data.append("longitude", lng);
+          } else {
+            console.error("Invalid gpsCoordinates format:", formData.gpsCoordinates);
+            throw new Error("Invalid GPS coordinates format. Expected 'latitude,longitude'");
           }
-        };
-      } else {
+        } 
+        // No GPS data
+        else {
+          console.error("NO GPS COORDINATES PROVIDED FOR HOUSEHOLD_LEAD!");
+          throw new Error("GPS coordinates are required for household lead registration. Please get your location first.");
+        }
+        
+        // Emergency contact
+        data.append("emergencyContact", formData.emergencyContact || formData.contactNumber || "");
+        break;
+
+      case "brgy_captain":
+        data.append("barangayName", formData.barangayName);
+        data.append("idNumber", formData.idNumber);
+        data.append("organization", formData.organization || "Barangay");
+        break;
+
+      case "household_member":
+        data.append("householdLeadId", formData.householdLeadId);
+        data.append("relationship", formData.relationship);
+        data.append("householdLeadName", formData.householdLeadName);
+        data.append("householdAddress", formData.householdAddress);
+        data.append("disability", formData.disability || "");
+        data.append("birthDate", formData.birthDate);
+        break;
+
+      default:
         return {
           success: false,
-          message: res.data.message || "Signup failed",
+          message: "Invalid role selected",
         };
+    }
+
+    // Append avatar if exists
+    if (formData.avatar) {
+      data.append("avatar", {
+        uri: formData.avatar.uri,
+        type: formData.avatar.type || "image/jpeg",
+        name: formData.avatar.fileName || "avatar.jpg",
+      });
+    }
+
+    // Debug: Log all form data entries
+    console.log("FormData entries being sent:");
+    for (let [key, value] of data._parts) {
+      if (key === 'avatar') {
+        console.log(`${key}: [File Object]`);
+      } else {
+        console.log(`${key}: ${value}`);
       }
-    } catch (error) {
-      console.error('Signup error:', error.response?.data || error.message);
-      
-      let errorMessage = "Network error";
-      if (error.response?.data) {
-        errorMessage = error.response.data.message || error.response.data.error;
+    }
+
+    // Make the signup request
+    const res = await axios.post(
+      `${apiUrl}/api/v1/authentication/signup`,
+      data,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        withCredentials: true,
+        timeout: 30000, // 30 seconds timeout
       }
-      
+    );
+
+    console.log("Signup response:", res.data);
+
+    if (res.data.success) {
+      const { token, user, roleProfile, verificationRequired } = res.data.data;
+
+      // Split fullName into first and last name
+      const nameParts = user.fullName.split(" ");
+      const first_name = nameParts[0];
+      const last_name = nameParts.slice(1).join(" ");
+
+      // Prepare data for AsyncStorage
+      const storageData = [
+        ["token", safeValue(token)],
+        ["role", safeValue(user.role)],
+        ["email", safeValue(user.email)],
+        ["first_name", safeValue(first_name)],
+        ["last_name", safeValue(last_name)],
+        ["contact_number", safeValue(formData.contactNumber)],
+        ["userId", safeValue(user._id)],
+        ["linkId", safeValue(user.linkedId)],
+        ["Designatedzone", safeValue(formData.barangay || "")],
+        ["theme", safeValue("light")],
+        ["avatar", safeValue(user.avatar || "")],
+      ];
+
+      // For household_lead, save GPS coordinates if available
+      if (formData.role === "household_lead" && (formData.latitude || formData.gpsCoordinates)) {
+        storageData.push(["latitude", safeValue(formData.latitude || "")]);
+        storageData.push(["longitude", safeValue(formData.longitude || "")]);
+        storageData.push(["gpsCoordinates", safeValue(formData.gpsCoordinates || "")]);
+        
+        console.log("Saved GPS data to AsyncStorage:", {
+          latitude: formData.latitude,
+          longitude: formData.longitude,
+          gpsCoordinates: formData.gpsCoordinates
+        });
+      }
+
+      await AsyncStorage.multiSet(storageData);
+
+      setRole(user.role || "");
+      setEmail(user.email || "");
+      setFirstName(first_name || "");
+      setLastName(last_name || "");
+      setContactNumber(formData.contactNumber || "");
+      setUserID(user._id || "");
+      setLinkId(user.linkedId || "");
+      setDesignatedzone(formData.barangay || "");
+      setAvatar(user.avatar || null);
+
+      // For household_lead, also set GPS coordinates in context
+      if (formData.role === "household_lead") {
+        // You might want to add state setters for these if needed
+        console.log("Household lead GPS coordinates:", {
+          latitude: formData.latitude,
+          longitude: formData.longitude
+        });
+      }
+
+      // Set axios header
+      if (token) {
+        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      }
+
+      return {
+        success: true,
+        message: res.data.message,
+        verificationRequired: verificationRequired || false,
+        data: {
+          user,
+          roleProfile,
+          token,
+        },
+      };
+    } else {
       return {
         success: false,
-        message: errorMessage,
-        errorDetails: error.response?.data
+        message: res.data.message || "Signup failed",
       };
     }
-  };
+  } catch (error) {
+    console.error("Signup error details:");
+    console.error("Error object:", error);
+    console.error("Error response:", error.response?.data);
+    console.error("Error message:", error.message);
+    console.error("Error code:", error.code);
+    
+    let errorMessage = "Network error occurred";
+    let errorDetails = null;
+    
+    if (error.response?.data) {
+      errorMessage = error.response.data.message || error.response.data.error || "Registration failed";
+      errorDetails = error.response.data;
+      
+      // Handle validation errors
+      if (error.response.data.errors) {
+        const validationErrors = error.response.data.errors.map(err => 
+          `${err.field || err.path}: ${err.message}`
+        ).join(", ");
+        errorMessage += `: ${validationErrors}`;
+      }
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    if (error.code === 'ECONNABORTED') {
+      errorMessage = "Request timeout. Please check your internet connection.";
+    }
+
+    return {
+      success: false,
+      message: errorMessage,
+      errorDetails: errorDetails,
+    };
+  }
+};
 
   // Check email availability
   const checkEmailAvailability = async (email) => {
     try {
       const res = await axios.get(
-        `${apiUrl}/api/v1/authentication/check-email?email=${encodeURIComponent(email)}`
+        `${apiUrl}/api/v1/authentication/check-email?email=${encodeURIComponent(
+          email
+        )}`
       );
-      
+
       return {
         success: true,
         available: res.data.available,
-        message: res.data.message
+        message: res.data.message,
       };
     } catch (error) {
-      console.error('Check email error:', error);
+      console.error("Check email error:", error);
       return {
         success: false,
-        message: error.response?.data?.message || "Failed to check email"
+        message: error.response?.data?.message || "Failed to check email",
       };
     }
   };
 
   const login = async (inputEmail, password) => {
     try {
-
       const res = await axios.post(
         `${apiUrl}/api/v1/authentication/login`,
         { email: inputEmail, password },
         { withCredentials: true }
       );
-
-      console.log('Login response:', res.data);
-
       if (res.data.status === "Success") {
         const {
           token,
@@ -376,7 +490,7 @@ export const AuthProvider = ({ children }) => {
         };
       }
     } catch (error) {
-      console.error('Login error:', error.response?.data || error.message);
+      console.error("Login error:", error.response?.data || error.message);
       return {
         success: false,
         message: error.response?.data?.message || "Network error",
@@ -388,9 +502,17 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       const keys = [
-        "token", "role", "email", "first_name", "last_name", 
-        "contact_number", "userId", "linkId", "Designatedzone", 
-        "theme", "avatar"
+        "token",
+        "role",
+        "email",
+        "first_name",
+        "last_name",
+        "contact_number",
+        "userId",
+        "linkId",
+        "Designatedzone",
+        "theme",
+        "avatar",
       ];
       await AsyncStorage.multiRemove(keys);
 
@@ -406,11 +528,11 @@ export const AuthProvider = ({ children }) => {
       setDesignatedzone(null);
       setTheme("light");
       setAvatar(null);
-      
+
       delete axios.defaults.headers.common["Authorization"];
-      console.log('Logout successful');
+      console.log("Logout successful");
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     }
   };
 
@@ -418,73 +540,80 @@ export const AuthProvider = ({ children }) => {
   const updateProfile = async (profileData) => {
     try {
       const data = new FormData();
-      
-      if (profileData.fullName) data.append('fullName', profileData.fullName);
-      if (profileData.contactNumber) data.append('contactNumber', profileData.contactNumber);
-      if (profileData.address) data.append('address', profileData.address);
-      
+
+      if (profileData.fullName) data.append("fullName", profileData.fullName);
+      if (profileData.contactNumber)
+        data.append("contactNumber", profileData.contactNumber);
+      if (profileData.address) data.append("address", profileData.address);
+
       // Append avatar if exists
       if (profileData.avatar) {
-        data.append('avatar', {
+        data.append("avatar", {
           uri: profileData.avatar.uri,
-          type: profileData.avatar.type || 'image/jpeg',
-          name: profileData.avatar.fileName || 'avatar.jpg'
+          type: profileData.avatar.type || "image/jpeg",
+          name: profileData.avatar.fileName || "avatar.jpg",
         });
       }
-      
+
       const res = await axios.put(
         `${apiUrl}/api/v1/authentication/update-profile`,
         data,
         {
           headers: {
-            'Content-Type': 'multipart/form-data',
+            "Content-Type": "multipart/form-data",
           },
-          withCredentials: true
+          withCredentials: true,
         }
       );
-      
+
       if (res.data.success) {
         // Update local storage and state with new data
         if (profileData.fullName) {
-          const nameParts = profileData.fullName.split(' ');
+          const nameParts = profileData.fullName.split(" ");
           const first_name = nameParts[0];
-          const last_name = nameParts.slice(1).join(' ');
-          
+          const last_name = nameParts.slice(1).join(" ");
+
           await AsyncStorage.multiSet([
             ["first_name", safeValue(first_name)],
-            ["last_name", safeValue(last_name)]
+            ["last_name", safeValue(last_name)],
           ]);
-          
+
           setFirstName(first_name);
           setLastName(last_name);
         }
-        
+
         if (profileData.contactNumber) {
-          await AsyncStorage.setItem("contact_number", safeValue(profileData.contactNumber));
+          await AsyncStorage.setItem(
+            "contact_number",
+            safeValue(profileData.contactNumber)
+          );
           setContactNumber(profileData.contactNumber);
         }
-        
+
         if (res.data.data.avatar) {
-          await AsyncStorage.setItem("avatar", safeValue(res.data.data.avatar.url || res.data.data.avatar));
+          await AsyncStorage.setItem(
+            "avatar",
+            safeValue(res.data.data.avatar.url || res.data.data.avatar)
+          );
           setAvatar(res.data.data.avatar.url || res.data.data.avatar);
         }
-        
+
         return {
           success: true,
           message: res.data.message,
-          data: res.data.data
+          data: res.data.data,
         };
       }
-      
+
       return {
         success: false,
-        message: res.data.message || "Update failed"
+        message: res.data.message || "Update failed",
       };
     } catch (error) {
-      console.error('Update profile error:', error);
+      console.error("Update profile error:", error);
       return {
         success: false,
-        message: error.response?.data?.message || "Network error"
+        message: error.response?.data?.message || "Network error",
       };
     }
   };
@@ -496,16 +625,16 @@ export const AuthProvider = ({ children }) => {
         `${apiUrl}/api/v1/authentication/forgot-password`,
         { email }
       );
-      
+
       return {
         success: true,
-        message: res.data.message
+        message: res.data.message,
       };
     } catch (error) {
-      console.error('Forgot password error:', error);
+      console.error("Forgot password error:", error);
       return {
         success: false,
-        message: error.response?.data?.message || "Network error"
+        message: error.response?.data?.message || "Network error",
       };
     }
   };
@@ -517,16 +646,16 @@ export const AuthProvider = ({ children }) => {
         `${apiUrl}/api/v1/authentication/reset-password/${token}`,
         { password: newPassword }
       );
-      
+
       return {
         success: true,
-        message: res.data.message
+        message: res.data.message,
       };
     } catch (error) {
-      console.error('Reset password error:', error);
+      console.error("Reset password error:", error);
       return {
         success: false,
-        message: error.response?.data?.message || "Network error"
+        message: error.response?.data?.message || "Network error",
       };
     }
   };
@@ -564,7 +693,7 @@ export const AuthProvider = ({ children }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

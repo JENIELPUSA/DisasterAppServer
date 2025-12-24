@@ -23,7 +23,7 @@ export default function Barangay({
   const [editingBarangay, setEditingBarangay] = useState(null);
 
   // -------------------- MUNICIPALITY DATA WITH ALL BILIRAN MUNICIPALITIES --------------------
-  const dummyMunicipalities = [
+  const Municipalities = [
     { id: 1, name: "Almeria" },
     { id: 2, name: "Biliran" },
     { id: 3, name: "Cabucgayan" },
@@ -49,7 +49,7 @@ export default function Barangay({
     // Simulate API loading
     setTimeout(() => {
       // Add total barangay count to each municipality
-      const enriched = dummyMunicipalities.map((m) => ({
+      const enriched = Municipalities.map((m) => ({
         ...m,
         totalBarangays: barangays.filter((b) => b.municipality === m.name)
           .length,
@@ -123,7 +123,6 @@ export default function Barangay({
   // -------------------- HANDLE REGISTER FORM SUBMIT --------------------
   const handleRegisterFormSubmit = async (barangayData) => {
     await updateBarangay(barangayData.id, barangayData);
-    console.log("Submitted barangay data:", barangayData);
     handleRegisterFormClose();
   };
 

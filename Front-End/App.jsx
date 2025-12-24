@@ -9,7 +9,8 @@ import { EvacuationDisplayProvider } from "./src/contexts/EvacuationContext/Evac
 import LoginPage from "./src/screens/LoginPage";
 import MainTabs from "./MainTabs";
 import LoadingScreen from "./src/ReusableComponent/LoadingOverlay";
-import {HouseholdProvider} from "./src/contexts/HouseholdLeadContext/HouseholdContext";
+import { HouseholdProvider } from "./src/contexts/HouseholdLeadContext/HouseholdContext";
+import { HouseHoldMemberProvider } from "./src/contexts/HouseHoldMemberContext/HouseHoldMemberContext";
 
 const Stack = createNativeStackNavigator();
 
@@ -67,13 +68,15 @@ export default function App() {
     <NavigationContainer>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <AuthProvider>
-        <HouseholdProvider>
-          <EvacuationDisplayProvider>
-            <BarangayDisplayProvider>
-              <AppNavigator />
-            </BarangayDisplayProvider>
-          </EvacuationDisplayProvider>
-        </HouseholdProvider>
+        <HouseHoldMemberProvider>
+          <HouseholdProvider>
+            <EvacuationDisplayProvider>
+              <BarangayDisplayProvider>
+                <AppNavigator />
+              </BarangayDisplayProvider>
+            </EvacuationDisplayProvider>
+          </HouseholdProvider>
+        </HouseHoldMemberProvider>
       </AuthProvider>
     </NavigationContainer>
   );

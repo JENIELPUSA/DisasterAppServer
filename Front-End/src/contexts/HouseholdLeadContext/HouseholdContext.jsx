@@ -21,6 +21,7 @@ export const HouseholdProvider = ({ children }) => {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [barangayFilter, setBarangayFilter] = useState("");
+  const [DropdowndataLead, setDropdownLead] = useState("");
   const backendUrl = Constants.expoConfig.extra.apiUrl;
 
   const handleError = (error) => {
@@ -29,70 +30,76 @@ export const HouseholdProvider = ({ children }) => {
   };
 
   // Fetch household leads for dropdown (public)
-  const fetchHouseholdLeadsForDropdown = useCallback(async (barangay = "") => {
-    try {
-      const params = {};
-      if (barangay) params.barangay = barangay;
+  const fetchHouseholdLeadsForDropdown = useCallback(
+    async (barangay = "") => {
+      try {
+        const params = {};
+        if (barangay) params.barangay = barangay;
 
-      const res = await axios.get(`${backendUrl}/api/household-leads/dropdown`, { params });
-      return res.data.data || [];
-    } catch (error) {
-      handleError(error);
-      return [];
-    }
-  }, [backendUrl]);
+        const res = await axios.get(
+          `${backendUrl}/api/v1/HouseholdLead/DropdownAllHouseHold`,
+          { params }
+        );
+        return res.data.data || [];
+      } catch (error) {
+        handleError(error);
+        return [];
+      }
+    },
+    [backendUrl]
+  );
 
-  // Fetch household leads (admin/brgy captain)
-  const fetchHouseholdLeads = useCallback(async (page = 1, filters = {}) => {
+const fetchHouseholdLeads = useCallback(
+  async (filters = {}) => {
     if (!authToken) return;
 
     try {
       setLoading(true);
-      const params = { 
-        page, 
-        search: search || filters.search,
-        barangay: barangayFilter || filters.barangay || (user?.role === 'brgy_captain' ? user?.barangay : '')
-      };
 
-      const res = await axios.get(`${backendUrl}/api/household-leads`, {
+      const params = {};
+
+      // Only include search if not empty
+      const searchQuery = filters.search ?? search;
+      if (searchQuery && searchQuery.trim() !== "") {
+        params.search = searchQuery.trim();
+      }
+
+      // Only include barangayId if provided
+      const barangayId = filters.selectedBarangayId;
+      if (barangayId && barangayId.trim() !== "") {
+        params.barangayId = barangayId.trim();
+      }
+
+      const res = await axios.get(`${backendUrl}/api/v1/HouseholdLead`, {
         params,
         headers: { Authorization: `Bearer ${authToken}` },
       });
 
-      const { data, totalItems, currentPage: resPage, totalPages: resTotalPages } = res.data;
+      const { data = [], totalItems = 0, currentPage = 1, totalPages = 1 } = res.data;
 
-      setHouseholdLeads(data || []);
-      setTotalHouseholdLeads(totalItems || 0);
-      setCurrentPage(resPage || page);
-      setTotalPages(resTotalPages || 1);
+      setHouseholdLeads(data);
+      setTotalHouseholdLeads(totalItems);
+      setCurrentPage(currentPage);
+      setTotalPages(totalPages);
     } catch (error) {
       handleError(error);
     } finally {
       setLoading(false);
     }
-  }, [authToken, backendUrl, search, barangayFilter, user]);
-
-  // Get household lead profile (current user)
-  const getHouseholdLeadProfile = useCallback(async () => {
-    if (!authToken || user?.role !== 'household_lead') return null;
-
-    try {
-      const res = await axios.get(`${backendUrl}/api/household-lead/profile`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      return res.data.data;
-    } catch (error) {
-      handleError(error);
-      return null;
-    }
-  }, [authToken, backendUrl, user]);
+  },
+  [authToken, backendUrl, search]
+);
 
   // Create household lead profile
   const createHouseholdLeadProfile = async (values) => {
     try {
-      const res = await axios.post(`${backendUrl}/api/household-lead/profile`, values, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const res = await axios.post(
+        `${backendUrl}/api/household-lead/profile`,
+        values,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
+      );
 
       if (res.data.success) {
         return { success: true, data: res.data.data };
@@ -100,16 +107,23 @@ export const HouseholdProvider = ({ children }) => {
       return { success: false, error: res.data.message };
     } catch (error) {
       handleError(error);
-      return { success: false, error: error.response?.data?.message || error.message };
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+      };
     }
   };
 
   // Update household lead profile
   const updateHouseholdLeadProfile = async (values) => {
     try {
-      const res = await axios.patch(`${backendUrl}/api/household-lead/profile`, values, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const res = await axios.patch(
+        `${backendUrl}/api/household-lead/profile`,
+        values,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
+      );
 
       if (res.data.success) {
         return { success: true, data: res.data.data };
@@ -117,38 +131,25 @@ export const HouseholdProvider = ({ children }) => {
       return { success: false, error: res.data.message };
     } catch (error) {
       handleError(error);
-      return { success: false, error: error.response?.data?.message || error.message };
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+      };
     }
   };
 
-  // Get household members
-  const fetchHouseholdMembers = useCallback(async (householdLeadId = null) => {
-    if (!authToken) return;
-
-    try {
-      const id = householdLeadId || user?.linkedId;
-      if (!id) return;
-
-      const res = await axios.get(`${backendUrl}/api/household-members/${id}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      setHouseholdMembers(res.data.data?.members || []);
-      return res.data.data;
-    } catch (error) {
-      handleError(error);
-      return null;
-    }
-  }, [authToken, backendUrl, user]);
-
+ 
   // Get household member profile (current user)
   const getHouseholdMemberProfile = useCallback(async () => {
-    if (!authToken || user?.role !== 'household_member') return null;
+    if (!authToken || user?.role !== "household_member") return null;
 
     try {
-      const res = await axios.get(`${backendUrl}/api/household-member/profile`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const res = await axios.get(
+        `${backendUrl}/api/household-member/profile`,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
+      );
       return res.data.data;
     } catch (error) {
       handleError(error);
@@ -159,9 +160,13 @@ export const HouseholdProvider = ({ children }) => {
   // Create household member profile
   const createHouseholdMemberProfile = async (values) => {
     try {
-      const res = await axios.post(`${backendUrl}/api/household-member/profile`, values, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const res = await axios.post(
+        `${backendUrl}/api/household-member/profile`,
+        values,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
+      );
 
       if (res.data.success) {
         return { success: true, data: res.data.data };
@@ -169,19 +174,26 @@ export const HouseholdProvider = ({ children }) => {
       return { success: false, error: res.data.message };
     } catch (error) {
       handleError(error);
-      return { success: false, error: error.response?.data?.message || error.message };
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+      };
     }
   };
 
   // Verify household member
   const verifyHouseholdMember = async (memberId, verificationCode) => {
     try {
-      const res = await axios.post(`${backendUrl}/api/household-member/verify`, {
-        memberId,
-        verificationCode
-      }, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const res = await axios.post(
+        `${backendUrl}/api/household-member/verify`,
+        {
+          memberId,
+          verificationCode,
+        },
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
+      );
 
       if (res.data.success) {
         fetchHouseholdMembers();
@@ -190,16 +202,22 @@ export const HouseholdProvider = ({ children }) => {
       return { success: false, error: res.data.message };
     } catch (error) {
       handleError(error);
-      return { success: false, error: error.response?.data?.message || error.message };
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+      };
     }
   };
 
   // Remove household member
   const removeHouseholdMember = async (memberId) => {
     try {
-      const res = await axios.delete(`${backendUrl}/api/household-member/${memberId}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      const res = await axios.delete(
+        `${backendUrl}/api/household-member/${memberId}`,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
+      );
 
       if (res.data.success) {
         fetchHouseholdMembers();
@@ -208,7 +226,10 @@ export const HouseholdProvider = ({ children }) => {
       return { success: false, error: res.data.message };
     } catch (error) {
       handleError(error);
-      return { success: false, error: error.response?.data?.message || error.message };
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+      };
     }
   };
 
@@ -227,18 +248,40 @@ export const HouseholdProvider = ({ children }) => {
     }
   }, [authToken, backendUrl]);
 
-  useEffect(() => {
-    if (authToken) {
-      if (user?.role === 'household_lead') {
-        fetchHouseholdMembers();
-        getHouseholdLeadProfile();
-      } else if (user?.role === 'household_member') {
-        getHouseholdMemberProfile();
-      } else if (user?.role === 'brgy_captain' || user?.role === 'admin') {
-        fetchHouseholdLeads(1);
+  const fetchDropdownAllLead = useCallback(
+    async (barangayId) => {
+      if (!barangayId) return; // Require barangay ID
+      try {
+        setLoading(true);
+
+        const res = await axios.get(
+          `${backendUrl}/api/v1/HouseholdLead/DropdownAllHouseHold`,
+          {
+            params: { barangay: barangayId },
+          }
+        );
+
+        setDropdownLead(res.data.data || []);
+      } catch (error) {
+        console.error("Fetch household leads error:", error);
+      } finally {
+        setLoading(false);
       }
-    }
-  }, [authToken, user]);
+    },
+    [backendUrl]
+  );
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        await getHouseholdMemberProfile();
+        await fetchHouseholdLeadsForDropdown();
+      } catch (error) {
+        console.error("Error loading data:", error);
+      }
+    };
+
+    loadData();
+  }, []); // Empty dependency array, tatakbo lang once on mount
 
   return (
     <HouseholdContext.Provider
@@ -255,15 +298,15 @@ export const HouseholdProvider = ({ children }) => {
         setBarangayFilter,
         fetchHouseholdLeadsForDropdown,
         fetchHouseholdLeads,
-        getHouseholdLeadProfile,
         createHouseholdLeadProfile,
         updateHouseholdLeadProfile,
-        fetchHouseholdMembers,
         getHouseholdMemberProfile,
         createHouseholdMemberProfile,
         verifyHouseholdMember,
         removeHouseholdMember,
         getHouseholdStatistics,
+        DropdowndataLead,
+        fetchDropdownAllLead,
       }}
     >
       {children}

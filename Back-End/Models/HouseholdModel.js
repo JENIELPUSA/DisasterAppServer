@@ -1,11 +1,6 @@
 const mongoose = require("mongoose");
 
 const HouseholdSchema = new mongoose.Schema({
-  barangay: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: "Barangay", 
-    required: true 
-  },
   householdHead: { type: String, required: true },
   address: { type: String, required: true },
   familyMembers: { type: Number, required: true },
