@@ -21,19 +21,23 @@ export const BarangayDisplayProvider = ({ children }) => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isBarangaysDropdown, setBarangaysDropdown] = useState([])
   const backendUrl = Constants.expoConfig.extra.apiUrl; // Expo environment variable
+<<<<<<< HEAD
   const [isBarangaysDropdown, setBarangaysDropdown] = useState();
   // -----------------------------
   // Centralized error handler
   // -----------------------------
+=======
+
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
   const handleError = (error) => {
     console.error(error);
     // optionally show a modal or toast here
   };
 
-  // -----------------------------
-  // Fetch barangays with filters
-  // -----------------------------
+
+
   const fetchBarangays = useCallback(
     async (search = "", page = 1) => {
       if (!authToken) return;
@@ -41,17 +45,22 @@ export const BarangayDisplayProvider = ({ children }) => {
       try {
         setLoading(true);
 
+<<<<<<< HEAD
         const searchText = (search ?? "").toString().trim();
+=======
+        const searchText =
+          typeof search === "string" ? search.trim() : "";
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
 
         const params = {};
-        if (searchText) params.search = searchText;
+        if (searchText.length > 0) params.search = searchText;
         if (page) params.page = page;
 
         const res = await axios.get(`${backendUrl}/api/v1/Barangay`, {
           params,
           headers: {
             Authorization: `Bearer ${authToken}`,
-            "Cache-Control": "no-cache", // prevent 304
+            "Cache-Control": "no-cache",
           },
         });
 
@@ -72,9 +81,10 @@ export const BarangayDisplayProvider = ({ children }) => {
         setLoading(false);
       }
     },
-    [authToken] // only depend on authToken
+    [authToken]
   );
 
+<<<<<<< HEAD
   const FetchBarangayDropdown = useCallback(
     async (search = "", page = 1) => {
       try {
@@ -102,17 +112,47 @@ export const BarangayDisplayProvider = ({ children }) => {
           currentPage: resCurrentPage,
           totalPages: resTotalPages,
         } = res.data;
+=======
+
+ const BarangayDropdown = useCallback(
+    async (search = "", page = 1) => {
+      if (!authToken) return;
+
+      try {
+        setLoading(true);
+
+        const searchText = typeof search === "string" ? search.trim() : "";
+        const params = {};
+        if (searchText.length > 0) params.search = searchText;
+        if (page) params.page = page;
+        params.limit = 10; // optional limit
+
+        const res = await axios.get(`${backendUrl}/api/v1/Barangay/BarangayDropdown`, {
+          params,
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Cache-Control": "no-cache",
+          },
+        });
+
+        const { data, totalItems, currentPage: resCurrentPage, totalPages: resTotalPages } = res.data;
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
 
         setBarangaysDropdown(data || []);
         setTotalBarangays(totalItems || 0);
         setCurrentPage(resCurrentPage || page);
         setTotalPages(resTotalPages || 1);
       } catch (error) {
+<<<<<<< HEAD
         handleError(error);
+=======
+        console.error("Error fetching barangays:", error);
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
       } finally {
         setLoading(false);
       }
     },
+<<<<<<< HEAD
     [] 
   );
 
@@ -125,6 +165,25 @@ export const BarangayDisplayProvider = ({ children }) => {
 
     return () => clearTimeout(timeout);
   }, [search, dateFrom, dateTo, fetchBarangays, FetchBarangayDropdown]);
+=======
+    [authToken, backendUrl]
+  );
+
+
+  function safeTrim(value) {
+    return typeof value === "string" ? value.trim() : "";
+  }
+
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      fetchBarangays(1);
+      BarangayDropdown();
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [search, dateFrom, dateTo, fetchBarangays,BarangayDropdown]);
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
 
   const addBarangay = async (values) => {
     try {
@@ -155,9 +214,7 @@ export const BarangayDisplayProvider = ({ children }) => {
     }
   };
 
-  // -----------------------------
-  // Delete barangay
-  // -----------------------------
+
   const deleteBarangay = async (id) => {
     try {
       const res = await axios.delete(`${backendUrl}/api/v1/Barangay/${id}`, {
@@ -176,9 +233,7 @@ export const BarangayDisplayProvider = ({ children }) => {
     }
   };
 
-  // -----------------------------
-  // Update barangay
-  // -----------------------------
+
   const updateBarangay = async (id, values) => {
     try {
       const res = await axios.patch(
@@ -226,9 +281,6 @@ export const BarangayDisplayProvider = ({ children }) => {
     }
   };
 
-  // -----------------------------
-  // Fetch single barangay
-  // -----------------------------
   const getBarangay = async (id) => {
     try {
       const res = await axios.get(`${backendUrl}/api/v1/Barangay/${id}`, {
@@ -260,8 +312,12 @@ export const BarangayDisplayProvider = ({ children }) => {
         deleteBarangay,
         updateBarangay,
         toggleBarangayStatus,
+<<<<<<< HEAD
         getBarangay,
         isBarangaysDropdown,
+=======
+        getBarangay, isBarangaysDropdown
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
       }}
     >
       {children}

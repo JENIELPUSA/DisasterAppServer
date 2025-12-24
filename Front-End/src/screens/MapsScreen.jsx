@@ -8,9 +8,15 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+<<<<<<< HEAD
   Modal,
   ScrollView,
   StyleSheet
+=======
+  TextInput,
+  ScrollView,
+  FlatList
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { BarangayDisplayContext } from "../contexts/BrgyContext/BarangayContext";
@@ -365,12 +371,20 @@ export default function MapsScreen() {
   const [selectedView, setSelectedView] = useState("both");
   const [isInitialized, setIsInitialized] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+<<<<<<< HEAD
   const [showHouseholdModal, setShowHouseholdModal] = useState(false);
   const [showMapLegend, setShowMapLegend] = useState(false);
   const [mapLoading, setMapLoading] = useState(true);
+=======
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
 
   const slideAnim = useRef(new Animated.Value(300)).current;
   const arrowRotate = useRef(new Animated.Value(0)).current;
+  const searchSlideAnim = useRef(new Animated.Value(0)).current;
 
   // Household data (same as your original data)
   const householdData = [
@@ -619,6 +633,104 @@ export default function MapsScreen() {
     }
   }, [barangays, evacuations]);
 
+  // Search functionality
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    const allItems = [
+      ...barangays.map(item => ({ 
+        ...item, 
+        type: 'municipality',
+        displayName: item.name || item.barangay_name || 'Unknown Municipality'
+      })),
+      ...evacuations.map(item => ({ 
+        ...item, 
+        type: 'evacuation',
+        displayName: item.name || item.evacuation_name || 'Unknown Evacuation'
+      }))
+    ];
+
+    const filtered = allItems.filter(item => {
+      const name = item.displayName.toLowerCase();
+      const address = item.address ? item.address.toLowerCase() : '';
+      const type = item.type;
+      
+      return name.includes(query) || 
+             address.includes(query) ||
+             type.includes(query);
+    });
+
+    setSearchResults(filtered);
+    setShowSearchResults(true);
+  }, [searchQuery, barangays, evacuations]);
+
+  const handleSearchFocus = () => {
+    setIsSearchFocused(true);
+    Animated.timing(searchSlideAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleSearchBlur = () => {
+    setIsSearchFocused(false);
+    if (searchQuery === "") {
+      Animated.timing(searchSlideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const handleSearchItemPress = (item) => {
+    console.log("Selected item:", item);
+    
+    // Send data to WebView to focus on selected item
+    if (webViewRef.current && isInitialized) {
+      const data = {
+        view: item.type === 'municipality' ? "municipalities" : "evacuations",
+        municipalities: barangays,
+        evacuations: evacuations,
+        roads: [],
+        household: [],
+        municipalitiesVisible: true,
+        evacuationsVisible: true,
+        roadsVisible: true,
+        householdVisible: true,
+        focusOn: {
+          id: item.id,
+          type: item.type,
+          coordinates: item.coordinates || item.location,
+          name: item.displayName
+        }
+      };
+      webViewRef.current.postMessage(JSON.stringify(data));
+    }
+    
+    // Clear search and hide results
+    setSearchQuery("");
+    setShowSearchResults(false);
+    setIsSearchFocused(false);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setShowSearchResults(false);
+    setIsSearchFocused(false);
+    Animated.timing(searchSlideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const toggleCollapse = () => {
     if (!isInitialized) return;
 
@@ -790,6 +902,7 @@ export default function MapsScreen() {
   // Panel height based on collapsed state
   const panelHeight = isCollapsed ? 150 : 270;
 
+<<<<<<< HEAD
   // Format date
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -822,6 +935,128 @@ export default function MapsScreen() {
         <FontAwesome5 name="map-signs" size={22} color="#3b82f6" />
       </TouchableOpacity>
 
+=======
+  // Search results item renderer
+  const renderSearchResultItem = ({ item }) => (
+    <TouchableOpacity
+      className="p-4 border-b border-gray-100 bg-white active:bg-gray-50"
+      onPress={() => handleSearchItemPress(item)}
+    >
+      <View className="flex-row items-center">
+        <View className={`w-10 h-10 rounded-full justify-center items-center mr-3 ${
+          item.type === 'municipality' ? 'bg-blue-100' : 'bg-orange-100'
+        }`}>
+          <MaterialIcons
+            name={item.type === 'municipality' ? 'location-city' : 'place'}
+            size={22}
+            color={item.type === 'municipality' ? '#3b82f6' : '#f97316'}
+          />
+        </View>
+        <View className="flex-1">
+          <Text className="text-gray-800 font-semibold text-base">
+            {item.displayName}
+          </Text>
+          <Text className="text-gray-500 text-sm mt-1">
+            {item.type === 'municipality' ? 'Municipality' : 'Evacuation Center'}
+          </Text>
+          {item.address && (
+            <Text className="text-gray-400 text-xs mt-1">
+              <MaterialIcons name="location-on" size={12} color="#9ca3af" />
+              {" "}{item.address}
+            </Text>
+          )}
+        </View>
+        <MaterialIcons name="chevron-right" size={24} color="#d1d5db" />
+      </View>
+    </TouchableOpacity>
+  );
+
+  return (
+    <View className="flex-1">
+      {/* Search Bar Container */}
+      <Animated.View 
+        className="absolute top-0 left-0 right-0 z-10"
+        style={{
+          transform: [{
+            translateY: searchSlideAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 0]
+            })
+          }],
+          opacity: searchSlideAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [1, 1]
+          })
+        }}
+      >
+        {/* Search Input */}
+        <View className="mx-4 mt-10 mb-2">
+          <View className="flex-row items-center bg-white rounded-full shadow-lg border border-gray-200 px-4 py-3">
+            <MaterialIcons name="search" size={24} color="#6b7280" />
+            <TextInput
+              className="flex-1 ml-3 text-gray-800 text-base"
+              placeholder="Search municipalities or evacuation centers..."
+              placeholderTextColor="#9ca3af"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={handleSearchFocus}
+              onBlur={handleSearchBlur}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+            {searchQuery !== "" && (
+              <TouchableOpacity onPress={clearSearch} className="ml-2">
+                <MaterialIcons name="close" size={22} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Search Results Dropdown */}
+        {showSearchResults && searchResults.length > 0 && (
+          <View className="mx-4 max-h-80 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+            <View className="p-3 border-b border-gray-100 bg-gray-50">
+              <Text className="text-gray-600 font-semibold">
+                Search Results ({searchResults.length})
+              </Text>
+            </View>
+            <FlatList
+              data={searchResults}
+              renderItem={renderSearchResultItem}
+              keyExtractor={(item, index) => `${item.type}-${item.id}-${index}`}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        )}
+
+        {/* No Results Found */}
+        {showSearchResults && searchResults.length === 0 && searchQuery !== "" && (
+          <View className="mx-4 mt-2 bg-white rounded-2xl shadow-lg border border-gray-200 p-6 items-center">
+            <MaterialIcons name="search-off" size={48} color="#d1d5db" />
+            <Text className="text-gray-500 text-lg font-semibold mt-3">
+              No results found
+            </Text>
+            <Text className="text-gray-400 text-center mt-1">
+              Try searching for a different municipality or evacuation center
+            </Text>
+          </View>
+        )}
+      </Animated.View>
+
+      {/* Map Background Overlay when searching */}
+      {showSearchResults && (
+        <TouchableOpacity
+          className="absolute inset-0 bg-black bg-opacity-30 z-5"
+          onPress={() => {
+            setShowSearchResults(false);
+            setIsSearchFocused(false);
+          }}
+          activeOpacity={1}
+        />
+      )}
+
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
       <WebView
         ref={webViewRef}
         source={require("../../assets/map.html")}

@@ -14,19 +14,26 @@ import LoginForm from "../components/LoginForm";
 import { AuthContext } from "../contexts/AuthContext";
 import { HouseholdContext } from "../contexts/HouseholdLeadContext/HouseholdContext";
 import LoadingOverlay from "../ReusableComponent/LoadingOverlay";
+<<<<<<< HEAD
 import { BarangayDisplayContext } from "../contexts/BrgyContext/BarangayContext";
 
+=======
+import { BarangayDisplayContext } from "../contexts/BrgyContext/BarangayContext"
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
 export default function LoginPage({ navigation }) {
   const { isBarangaysDropdown } = useContext(BarangayDisplayContext);
   const { login, signup, checkEmailAvailability } = useContext(AuthContext); // Added signup and checkEmailAvailability
+<<<<<<< HEAD
   const { DropdowndataLead, fetchDropdownAllLead, loading } =
     useContext(HouseholdContext);
+=======
+  const { isBarangaysDropdown } = useContext(BarangayDisplayContext)
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [currentSlide, setCurrentSlide] = useState(0);
-
   const scrollViewRef = useRef(null);
   const screenWidth = 360;
 

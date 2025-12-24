@@ -144,13 +144,22 @@ exports.deleteBarangay = AsyncErrorHandler(async (req, res) => {
 
 // Get Barangays for Dropdown
 exports.getBarangays = AsyncErrorHandler(async (req, res, next) => {
+<<<<<<< HEAD
   const data = await Barangay.find()
     .select('barangayName')
+=======
+  const barangays = await Barangay.find()
+    .select('barangayName') // Only include barangayName
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
     .sort({ barangayName: 1 });
 
   res.status(200).json({
     success: true,
     count: data.length,
+<<<<<<< HEAD
     data
+=======
+    data: barangays
+>>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
   });
 });
