@@ -3,7 +3,6 @@ $allFiles = Get-ChildItem -Recurse -File
 
 # Read .easignore patterns
 $ignorePatterns = Get-Content .\.easignore | Where-Object { $_ -and $_ -notmatch '^#' }
-
 # Function to check if a file matches any ignore pattern
 function Is-Ignored($file, $patterns) {
     foreach ($pattern in $patterns) {

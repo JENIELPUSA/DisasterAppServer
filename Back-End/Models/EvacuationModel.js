@@ -15,6 +15,10 @@ const EvacuationSchema = new mongoose.Schema(
       longitude: { type: Number, required: true },
       address: { type: String },
     },
+    municipality: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Municipality",
+    },
     contactPerson: {
       name: { type: String },
       contactNumber: { type: String },

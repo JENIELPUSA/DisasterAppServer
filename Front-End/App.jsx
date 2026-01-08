@@ -11,6 +11,8 @@ import MainTabs from "./MainTabs";
 import LoadingScreen from "./src/ReusableComponent/LoadingOverlay";
 import { HouseholdProvider } from "./src/contexts/HouseholdLeadContext/HouseholdContext";
 import { HouseHoldMemberProvider } from "./src/contexts/HouseHoldMemberContext/HouseHoldMemberContext";
+import { ProfileProvider } from "./src/contexts/ProfileContext/ProfileContext";
+import { MunicipalityProvider } from "./src/contexts/MunicipalityContext/MunicipalityContext";
 
 const Stack = createNativeStackNavigator();
 
@@ -68,15 +70,19 @@ export default function App() {
     <NavigationContainer>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <AuthProvider>
-        <HouseHoldMemberProvider>
-          <HouseholdProvider>
-            <EvacuationDisplayProvider>
-              <BarangayDisplayProvider>
-                <AppNavigator />
-              </BarangayDisplayProvider>
-            </EvacuationDisplayProvider>
-          </HouseholdProvider>
-        </HouseHoldMemberProvider>
+        <MunicipalityProvider>
+          <ProfileProvider>
+            <HouseHoldMemberProvider>
+              <HouseholdProvider>
+                <EvacuationDisplayProvider>
+                  <BarangayDisplayProvider>
+                    <AppNavigator />
+                  </BarangayDisplayProvider>
+                </EvacuationDisplayProvider>
+              </HouseholdProvider>
+            </HouseHoldMemberProvider>
+          </ProfileProvider>
+        </MunicipalityProvider>
       </AuthProvider>
     </NavigationContainer>
   );

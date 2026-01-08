@@ -15,13 +15,16 @@ export const HouseholdProvider = ({ children }) => {
   const { authToken, logout, user } = useContext(AuthContext);
   const [householdLeads, setHouseholdLeads] = useState([]);
   const [totalHouseholdLeads, setTotalHouseholdLeads] = useState(0);
+  const [error, setError] = useState(null); // ✅ Added error state
   const [householdMembers, setHouseholdMembers] = useState([]);
+  const [NotifyLeadRescue, setNotifyLeadRescue] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [barangayFilter, setBarangayFilter] = useState("");
   const [DropdowndataLead, setDropdownLead] = useState("");
+  const [PinpointHousehold, setPinpointHousehold] = useState("");
   const backendUrl = Constants.expoConfig.extra.apiUrl;
 
   const handleError = (error) => {
@@ -49,46 +52,51 @@ export const HouseholdProvider = ({ children }) => {
     [backendUrl]
   );
 
-const fetchHouseholdLeads = useCallback(
-  async (filters = {}) => {
-    if (!authToken) return;
+  const fetchHouseholdLeads = useCallback(
+    async (filters = {}) => {
+      if (!authToken) return;
 
-    try {
-      setLoading(true);
+      try {
+        setLoading(true);
 
-      const params = {};
+        const params = {};
 
-      // Only include search if not empty
-      const searchQuery = filters.search ?? search;
-      if (searchQuery && searchQuery.trim() !== "") {
-        params.search = searchQuery.trim();
+        // Only include search if not empty
+        const searchQuery = filters.search ?? search;
+        if (searchQuery && searchQuery.trim() !== "") {
+          params.search = searchQuery.trim();
+        }
+
+        // Only include barangayId if provided
+        const barangayId = filters.selectedBarangayId;
+        if (barangayId && barangayId.trim() !== "") {
+          params.barangayId = barangayId.trim();
+        }
+
+        const res = await axios.get(`${backendUrl}/api/v1/HouseholdLead`, {
+          params,
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+
+        const {
+          data = [],
+          totalItems = 0,
+          currentPage = 1,
+          totalPages = 1,
+        } = res.data;
+
+        setHouseholdLeads(data);
+        setTotalHouseholdLeads(totalItems);
+        setCurrentPage(currentPage);
+        setTotalPages(totalPages);
+      } catch (error) {
+        handleError(error);
+      } finally {
+        setLoading(false);
       }
-
-      // Only include barangayId if provided
-      const barangayId = filters.selectedBarangayId;
-      if (barangayId && barangayId.trim() !== "") {
-        params.barangayId = barangayId.trim();
-      }
-
-      const res = await axios.get(`${backendUrl}/api/v1/HouseholdLead`, {
-        params,
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      const { data = [], totalItems = 0, currentPage = 1, totalPages = 1 } = res.data;
-
-      setHouseholdLeads(data);
-      setTotalHouseholdLeads(totalItems);
-      setCurrentPage(currentPage);
-      setTotalPages(totalPages);
-    } catch (error) {
-      handleError(error);
-    } finally {
-      setLoading(false);
-    }
-  },
-  [authToken, backendUrl, search]
-);
+    },
+    [authToken, backendUrl, search]
+  );
 
   // Create household lead profile
   const createHouseholdLeadProfile = async (values) => {
@@ -138,7 +146,6 @@ const fetchHouseholdLeads = useCallback(
     }
   };
 
- 
   // Get household member profile (current user)
   const getHouseholdMemberProfile = useCallback(async () => {
     if (!authToken || user?.role !== "household_member") return null;
@@ -270,6 +277,45 @@ const fetchHouseholdLeads = useCallback(
     },
     [backendUrl]
   );
+
+  const getHouseholdLeadsByBarangayId = useCallback(
+    async (barangayId, page = 1) => {
+      if (!authToken || !barangayId) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Params for backend pagination/search if needed
+        const params = { page };
+
+        const res = await axios.get(
+          `${backendUrl}/api/v1/householdlead/getHouseholdLeadsByBarangayId/${barangayId}`,
+          {
+            headers: { Authorization: `Bearer ${authToken}` },
+            params, // optional, if your backend supports pagination
+          }
+        );
+
+        // Destructure like fetchEvacuation example
+        const { data, count } = res.data;
+
+        setPinpointHousehold(data || []);
+        setCurrentPage(page);
+        setTotalPages(1); // Adjust if backend sends totalPages
+
+        // Debug full nested objects
+        console.log("Household leads (full):", JSON.stringify(data, null, 2));
+      } catch (err) {
+        console.error("HouseholdLead Context Error:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authToken, backendUrl]
+  );
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -282,6 +328,34 @@ const fetchHouseholdLeads = useCallback(
 
     loadData();
   }, []); // Empty dependency array, tatakbo lang once on mount
+
+  const getHouseholdLeadsSendNotification = useCallback(
+    async (filters = {}) => {
+      if (!authToken) return;
+
+      try {
+        setLoading(true);
+
+        const params = {};
+        const res = await axios.get(
+          `${backendUrl}/api/v1/HouseholdLead/getHouseholdLeadsSendNotification`,
+          {
+            params,
+            headers: { Authorization: `Bearer ${authToken}` },
+          }
+        );
+
+        const { data = [] } = res.data;
+
+        setNotifyLeadRescue(data);
+      } catch (error) {
+        handleError(error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authToken, backendUrl]
+  );
 
   return (
     <HouseholdContext.Provider
@@ -307,6 +381,10 @@ const fetchHouseholdLeads = useCallback(
         getHouseholdStatistics,
         DropdowndataLead,
         fetchDropdownAllLead,
+        getHouseholdLeadsSendNotification,
+        NotifyLeadRescue,
+        getHouseholdLeadsByBarangayId,
+        PinpointHousehold,
       }}
     >
       {children}

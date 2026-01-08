@@ -5,6 +5,141 @@ const HouseholdMember = require("../Models/HouseholdMember");
 const AsyncErrorHandler = require("../Utils/AsyncErrorHandler");
 const mongoose = require("mongoose");
 
+exports.DisplayNearHouseLead = async (req, res, io) => {
+  try {
+    const { latitude, longitude, Distance = 1000 } = req.body;
+
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Valid coordinates required",
+      });
+    }
+
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+
+    if (isNaN(lat) || isNaN(lng)) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Valid coordinates required",
+      });
+    }
+
+    const pipeline = [
+      /* ================== COMPUTE DISTANCE ================== */
+      {
+        $addFields: {
+          distance: {
+            $let: {
+              vars: {
+                lat1Rad: { $multiply: ["$location.latitude", Math.PI / 180] },
+                lon1Rad: { $multiply: ["$location.longitude", Math.PI / 180] },
+                lat2Rad: lat * (Math.PI / 180),
+                lon2Rad: lng * (Math.PI / 180),
+              },
+              in: {
+                $multiply: [
+                  6371000,
+                  {
+                    $acos: {
+                      $add: [
+                        {
+                          $multiply: [
+                            { $sin: "$$lat1Rad" },
+                            { $sin: "$$lat2Rad" },
+                          ],
+                        },
+                        {
+                          $multiply: [
+                            { $cos: "$$lat1Rad" },
+                            { $cos: "$$lat2Rad" },
+                            { $cos: { $subtract: ["$$lon2Rad", "$$lon1Rad"] } },
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+
+      /* ================== FILTER BY RADIUS ================== */
+      {
+        $match: {
+          $expr: {
+            $and: [
+              { $lte: ["$distance", Distance] },
+              { $lt: ["$totalHouseholds", "$evacuationCapacity"] },
+            ],
+          },
+          isActive: true,
+        },
+      },
+
+      /* ================== GET NEAREST BARANGAY ONLY ================== */
+      { $sort: { distance: 1 } },
+      {
+        $group: {
+          _id: "$barangay",
+          nearestEvacuation: { $first: "$$ROOT" },
+        },
+      },
+      {
+        $replaceRoot: { newRoot: "$nearestEvacuation" },
+      },
+
+      /* ================== JOIN BARANGAY INFO ================== */
+      {
+        $lookup: {
+          from: "barangays",
+          localField: "barangay",
+          foreignField: "_id",
+          as: "barangay",
+        },
+      },
+      { $unwind: "$barangay" },
+
+      /* ================== LIMIT TO ONE BARANGAY RESULT ================== */
+      { $limit: 1 },
+
+      /* ================== PROJECT ================== */
+      {
+        $project: {
+          evacuationName: 1,
+          totalHouseholds: 1,
+          evacuationCapacity: 1,
+          location: 1,
+          contactPerson: 1,
+          isActive: 1,
+          distance: 1,
+          "barangay.barangayName": 1,
+          "barangay.municipality": 1,
+          "barangay.fullAddress": 1,
+        },
+      },
+    ];
+
+    const result = await HouseholdLead.aggregate(pipeline);
+
+    res.status(200).json({
+      status: "success",
+      data: result,
+      totalItems: result.length,
+    });
+  } catch (error) {
+    console.error("DisplayNearHouseLead Error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Something went wrong",
+      error: error.message,
+    });
+  }
+};
+
 // Create household lead profile
 exports.createHouseholdLead = async (req, res) => {
   try {
@@ -58,57 +193,55 @@ exports.createHouseholdLead = async (req, res) => {
   }
 };
 
-// Get household leads by barangayId
 exports.getHouseholdLeadsByBarangayId = async (req, res) => {
   try {
-    const { barangayId } = req.params; // or req.query.barangayId
+    const { barangayId } = req.params;
+    if (!barangayId)
+      return res
+        .status(400)
+        .json({ success: false, message: "barangayId is required" });
 
-    if (!barangayId) {
-      return res.status(400).json({
-        success: false,
-        message: "barangayId is required",
-      });
-    }
+    const data = await HouseholdLead.aggregate([
+      { $match: { barangayId: new mongoose.Types.ObjectId(barangayId) } },
+      // Lookup household members
+      {
+        $lookup: {
+          from: "householdmembers",
+          localField: "_id",
+          foreignField: "householdLeadId",
+          as: "members",
+        },
+      },
+      // Lookup household creator from UserLoginSchema
+      {
+        $lookup: {
+          from: "userloginschemas", // 🔹 collection name derived from model
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          barangayId: 1,
+          rescueStatus: 1,
+          totalMembers: 1,
+          householdCode: 1,
+          location: 1,
+          createdAt: 1,
+          user: { fullName: 1, email: 1, contactNumber: 1, address: 1 },
+          members: 1,
+        },
+      },
+    ]);
 
-    // Get household leads in the barangay
-    const householdLeads = await HouseholdLead.find({ barangayId })
-      .populate("userId", "fullName email contactNumber address barangay");
-
-    if (!householdLeads.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No household leads found for this barangay",
-      });
-    }
-
-    // Get members per household lead
-    const leadsWithMembers = await Promise.all(
-      householdLeads.map(async (lead) => {
-        const members = await HouseholdMember.find({
-          householdLeadId: lead._id,
-        }).populate("userId", "fullName email contactNumber");
-
-        return {
-          ...lead.toObject(),
-          members,
-        };
-      })
-    );
-
-    res.status(200).json({
-      success: true,
-      data: leadsWithMembers,
-    });
+    res.status(200).json({ success: true, count: data.length, data });
   } catch (error) {
     console.error("Get household leads by barangay error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 
 // Update household lead profile
 exports.updateHouseholdLead = async (req, res) => {
@@ -166,7 +299,7 @@ exports.getAllHouseholdLeads = async (req, res) => {
     // Filter by barangayId if provided
     if (barangayId && mongoose.Types.ObjectId.isValid(barangayId)) {
       pipeline.push({
-        $match: { barangayId: new mongoose.Types.ObjectId(barangayId) }
+        $match: { barangayId: new mongoose.Types.ObjectId(barangayId) },
       });
     }
 
@@ -176,11 +309,11 @@ exports.getAllHouseholdLeads = async (req, res) => {
         from: "userloginschemas",
         localField: "userId",
         foreignField: "_id",
-        as: "userInfo"
-      }
+        as: "userInfo",
+      },
     });
     pipeline.push({
-      $unwind: { path: "$userInfo", preserveNullAndEmptyArrays: true }
+      $unwind: { path: "$userInfo", preserveNullAndEmptyArrays: true },
     });
 
     // Lookup barangay info
@@ -189,11 +322,11 @@ exports.getAllHouseholdLeads = async (req, res) => {
         from: "barangays",
         localField: "barangayId",
         foreignField: "_id",
-        as: "barangayInfo"
-      }
+        as: "barangayInfo",
+      },
     });
     pipeline.push({
-      $unwind: { path: "$barangayInfo", preserveNullAndEmptyArrays: true }
+      $unwind: { path: "$barangayInfo", preserveNullAndEmptyArrays: true },
     });
 
     // Project final fields
@@ -204,11 +337,13 @@ exports.getAllHouseholdLeads = async (req, res) => {
         createdAt: 1,
         userId: { $ifNull: ["$userInfo._id", "Not Available"] },
         fullName: { $ifNull: ["$userInfo.fullName", "Not Available"] },
-        contactNumber: { $ifNull: ["$userInfo.contactNumber", "Not Available"] },
+        contactNumber: {
+          $ifNull: ["$userInfo.contactNumber", "Not Available"],
+        },
         address: { $ifNull: ["$barangayInfo.fullAddress", "Not Available"] },
         barangay: { $ifNull: ["$barangayInfo.barangayName", "Not Available"] },
-        familyMembers: { $ifNull: ["$familyMembers", 0] }
-      }
+        familyMembers: { $ifNull: ["$familyMembers", 0] },
+      },
     });
 
     // Sort latest first
@@ -220,15 +355,14 @@ exports.getAllHouseholdLeads = async (req, res) => {
     res.status(200).json({
       success: true,
       count: data.length,
-      data
+      data,
     });
-
   } catch (error) {
     console.error("Get Household Leads Error:", error);
     res.status(500).json({
       success: false,
       message: "Server Error",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -389,3 +523,57 @@ exports.DropdownAllHouseHold = async (req, res) => {
     });
   }
 };
+
+// Get Household Leads for Dropdown using $lookup including barangay
+exports.getHouseholdLeadsSendNotification = AsyncErrorHandler(
+  async (req, res, next) => {
+    const householdLeads = await HouseholdLead.aggregate([
+      {
+        $match: {
+          rescueStatus: { $ne: "none" }, // filter only leads with active rescue
+        },
+      },
+      {
+        $lookup: {
+          from: "userloginschemas",
+          localField: "userId",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
+        $lookup: {
+          from: "barangays", // collection name ng Barangay model sa MongoDB
+          localField: "barangayId",
+          foreignField: "_id",
+          as: "barangay",
+        },
+      },
+      { $unwind: { path: "$barangay", preserveNullAndEmptyArrays: true } }, // allow null
+      // Select fields
+      {
+        $project: {
+          id: "$_id",
+          name: "$user.fullName",
+          email: "$user.email",
+          address: "$user.address",
+          contact: "$user.contactNumber",
+          barangayName: "$barangay.name", // adjust field name sa collection mo
+          members: "$totalMembers",
+          maxMembers: "$familyMembers",
+          location: 1,
+          isFull: 1,
+          householdCode: 1,
+          rescueStatus: 1,
+        },
+      },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      count: householdLeads.length,
+      data: householdLeads,
+    });
+  }
+);

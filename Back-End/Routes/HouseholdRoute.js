@@ -21,4 +21,8 @@ router
     HouseholdMemberController.updateHouseholdMember
   );
 
+router
+  .route("/requestRescueByMember")
+  .post(authController.protect, HouseholdMemberController.requestRescueByMember);
+
 module.exports = router;

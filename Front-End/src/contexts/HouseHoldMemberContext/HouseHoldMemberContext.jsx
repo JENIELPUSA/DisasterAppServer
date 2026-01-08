@@ -125,6 +125,30 @@ export const HouseHoldMemberProvider = ({ children }) => {
     [authToken, backendUrl]
   );
 
+  const requestRescue = async (rescueStatus) => {
+    setLoading(true);
+    setCustomError(null);
+
+
+    try {
+      await axios.post(
+        `${backendUrl}/api/v1/HouseholdMember/requestRescueByMember`,
+        { rescueStatus},
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+      
+    } catch (err) {
+      setCustomError(err.response?.data?.message || err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <HouseHoldMemberContext.Provider
       value={{
@@ -136,6 +160,7 @@ export const HouseHoldMemberProvider = ({ children }) => {
         fetchHouseholdMembers,
         updateHouseholdMemberStatus,
         updateHouseholdMember,
+        requestRescue
       }}
     >
       {children}

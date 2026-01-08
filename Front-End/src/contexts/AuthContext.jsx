@@ -154,257 +154,278 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-// Signup function
-const signup = async (formData) => {
-  try {
-    console.log("Starting signup process...");
-    console.log("formData", formData);
-    console.log("Role:", formData.role);
-    console.log("GPS Data for household_lead:", { 
-      latitude: formData.latitude, 
-      longitude: formData.longitude,
-      gpsCoordinates: formData.gpsCoordinates,
-      barangay: formData.barangay
-    });
+  // Signup function
+  const signup = async (formData) => {
+    try {
+      // Create FormData object for multipart/form-data
+      const data = new FormData();
 
-    // Create FormData object for multipart/form-data
-    const data = new FormData();
+      // Append common fields
+      data.append("fullName", formData.fullName);
+      data.append("email", formData.email);
+      data.append("password", formData.password);
+      data.append("contactNumber", formData.contactNumber);
+      data.append("address", formData.address || "");
+      data.append("role", formData.role);
+      data.append("MunicipalityId", formData.MunicipalityId);
 
-    // Append common fields
-    data.append("fullName", formData.fullName);
-    data.append("email", formData.email);
-    data.append("password", formData.password);
-    data.append("contactNumber", formData.contactNumber);
-    data.append("address", formData.address || "");
-    data.append("role", formData.role);
+      // Append role-specific fields
+      switch (formData.role) {
+        case "rescuer":
+          data.append("organization", formData.organization);
+          data.append("idNumber", formData.idNumber);
+          break;
 
-    // Append role-specific fields
-    switch (formData.role) {
-      case "rescuer":
-        data.append("organization", formData.organization);
-        data.append("idNumber", formData.idNumber);
-        break;
-
-      case "household_lead":
-        // Barangay - dapat ObjectId kung ID, string kung name
-        if (formData.barangay) {
-          console.log("Appending barangayName for household_lead:", formData.barangay);
-          data.append("barangayName", formData.barangay);
-        }
-        
-        // Family members (required)
-        data.append("familyMembers", formData.familyMembers ? formData.familyMembers.toString() : "1");
-        
-        // GPS COORDINATES - REQUIRED FOR HOUSEHOLD LEAD
-        console.log("Checking GPS data for household_lead:", {
-          hasLatLong: !!(formData.latitude && formData.longitude),
-          hasGpsCoordinates: !!formData.gpsCoordinates,
-          latitude: formData.latitude,
-          longitude: formData.longitude,
-          gpsCoordinates: formData.gpsCoordinates
-        });
-        
-        // Priority 1: Separate latitude and longitude
-        if (formData.latitude && formData.longitude) {
-          console.log("Appending separate lat/long:", formData.latitude, formData.longitude);
-          data.append("latitude", formData.latitude.toString());
-          data.append("longitude", formData.longitude.toString());
-        } 
-        // Priority 2: gpsCoordinates string
-        else if (formData.gpsCoordinates) {
-          console.log("Parsing gpsCoordinates string:", formData.gpsCoordinates);
-          const coords = formData.gpsCoordinates.split(',');
-          if (coords.length >= 2) {
-            const lat = coords[0].trim();
-            const lng = coords[1].trim();
-            console.log("Parsed coordinates:", lat, lng);
-            data.append("latitude", lat);
-            data.append("longitude", lng);
-          } else {
-            console.error("Invalid gpsCoordinates format:", formData.gpsCoordinates);
-            throw new Error("Invalid GPS coordinates format. Expected 'latitude,longitude'");
+        case "household_lead":
+          // Barangay - dapat ObjectId kung ID, string kung name
+          if (formData.barangay) {
+            console.log(
+              "Appending barangayName for household_lead:",
+              formData.barangay
+            );
+            data.append("barangayName", formData.barangay);
           }
-        } 
-        // No GPS data
-        else {
-          console.error("NO GPS COORDINATES PROVIDED FOR HOUSEHOLD_LEAD!");
-          throw new Error("GPS coordinates are required for household lead registration. Please get your location first.");
+
+          // Family members (required)
+          data.append(
+            "familyMembers",
+            formData.familyMembers ? formData.familyMembers.toString() : "1"
+          );
+
+          // GPS COORDINATES - REQUIRED FOR HOUSEHOLD LEAD
+          console.log("Checking GPS data for household_lead:", {
+            hasLatLong: !!(formData.latitude && formData.longitude),
+            hasGpsCoordinates: !!formData.gpsCoordinates,
+            latitude: formData.latitude,
+            longitude: formData.longitude,
+            gpsCoordinates: formData.gpsCoordinates,
+          });
+
+          // Priority 1: Separate latitude and longitude
+          if (formData.latitude && formData.longitude) {
+            console.log(
+              "Appending separate lat/long:",
+              formData.latitude,
+              formData.longitude
+            );
+            data.append("latitude", formData.latitude.toString());
+            data.append("longitude", formData.longitude.toString());
+          }
+          // Priority 2: gpsCoordinates string
+          else if (formData.gpsCoordinates) {
+            console.log(
+              "Parsing gpsCoordinates string:",
+              formData.gpsCoordinates
+            );
+            const coords = formData.gpsCoordinates.split(",");
+            if (coords.length >= 2) {
+              const lat = coords[0].trim();
+              const lng = coords[1].trim();
+              console.log("Parsed coordinates:", lat, lng);
+              data.append("latitude", lat);
+              data.append("longitude", lng);
+            } else {
+              console.error(
+                "Invalid gpsCoordinates format:",
+                formData.gpsCoordinates
+              );
+              throw new Error(
+                "Invalid GPS coordinates format. Expected 'latitude,longitude'"
+              );
+            }
+          }
+          // No GPS data
+          else {
+            console.error("NO GPS COORDINATES PROVIDED FOR HOUSEHOLD_LEAD!");
+            throw new Error(
+              "GPS coordinates are required for household lead registration. Please get your location first."
+            );
+          }
+
+          // Emergency contact
+          data.append(
+            "emergencyContact",
+            formData.emergencyContact || formData.contactNumber || ""
+          );
+          break;
+
+        case "brgy_captain":
+          data.append("barangayName", formData.barangayName);
+          data.append("idNumber", formData.idNumber);
+          data.append("organization", formData.organization || "Barangay");
+          break;
+
+        case "household_member":
+          data.append("householdLeadId", formData.householdLeadId);
+          data.append("relationship", formData.relationship);
+          data.append("householdLeadName", formData.householdLeadName);
+          data.append("householdAddress", formData.householdAddress);
+          data.append("disability", formData.disability || "");
+          data.append("birthDate", formData.birthDate);
+          break;
+
+        default:
+          return {
+            success: false,
+            message: "Invalid role selected",
+          };
+      }
+
+      // Append avatar if exists
+      if (formData.avatar) {
+        data.append("avatar", {
+          uri: formData.avatar.uri,
+          type: formData.avatar.type || "image/jpeg",
+          name: formData.avatar.fileName || "avatar.jpg",
+        });
+      }
+
+      for (let [key, value] of data._parts) {
+        if (key === "avatar") {
+          console.log(`${key}: [File Object]`);
+        } else {
+          console.log(`${key}: ${value}`);
         }
-        
-        // Emergency contact
-        data.append("emergencyContact", formData.emergencyContact || formData.contactNumber || "");
-        break;
+      }
 
-      case "brgy_captain":
-        data.append("barangayName", formData.barangayName);
-        data.append("idNumber", formData.idNumber);
-        data.append("organization", formData.organization || "Barangay");
-        break;
+      // Make the signup request
+      const res = await axios.post(
+        `${apiUrl}/api/v1/authentication/signup`,
+        data,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          withCredentials: true,
+          timeout: 30000, // 30 seconds timeout
+        }
+      );
 
-      case "household_member":
-        data.append("householdLeadId", formData.householdLeadId);
-        data.append("relationship", formData.relationship);
-        data.append("householdLeadName", formData.householdLeadName);
-        data.append("householdAddress", formData.householdAddress);
-        data.append("disability", formData.disability || "");
-        data.append("birthDate", formData.birthDate);
-        break;
+      if (res.data.success) {
+        const { token, user, roleProfile, verificationRequired } =
+          res.data.data;
 
-      default:
+        // Split fullName into first and last name
+        const nameParts = user.fullName.split(" ");
+        const first_name = nameParts[0];
+        const last_name = nameParts.slice(1).join(" ");
+
+        // Prepare data for AsyncStorage
+        const storageData = [
+          ["token", safeValue(token)],
+          ["role", safeValue(user.role)],
+          ["email", safeValue(user.email)],
+          ["first_name", safeValue(first_name)],
+          ["last_name", safeValue(last_name)],
+          ["contact_number", safeValue(formData.contactNumber)],
+          ["userId", safeValue(user._id)],
+          ["linkId", safeValue(user.linkedId)],
+          ["Designatedzone", safeValue(formData.barangay || "")],
+          ["theme", safeValue("light")],
+          ["avatar", safeValue(user.avatar || "")],
+        ];
+
+        // For household_lead, save GPS coordinates if available
+        if (
+          formData.role === "household_lead" &&
+          (formData.latitude || formData.gpsCoordinates)
+        ) {
+          storageData.push(["latitude", safeValue(formData.latitude || "")]);
+          storageData.push(["longitude", safeValue(formData.longitude || "")]);
+          storageData.push([
+            "gpsCoordinates",
+            safeValue(formData.gpsCoordinates || ""),
+          ]);
+
+          console.log("Saved GPS data to AsyncStorage:", {
+            latitude: formData.latitude,
+            longitude: formData.longitude,
+            gpsCoordinates: formData.gpsCoordinates,
+          });
+        }
+
+        await AsyncStorage.multiSet(storageData);
+
+        setRole(user.role || "");
+        setEmail(user.email || "");
+        setFirstName(first_name || "");
+        setLastName(last_name || "");
+        setContactNumber(formData.contactNumber || "");
+        setUserID(user._id || "");
+        setLinkId(user.linkedId || "");
+        setDesignatedzone(formData.barangay || "");
+        setAvatar(user.avatar || null);
+
+        // For household_lead, also set GPS coordinates in context
+        if (formData.role === "household_lead") {
+          // You might want to add state setters for these if needed
+          console.log("Household lead GPS coordinates:", {
+            latitude: formData.latitude,
+            longitude: formData.longitude,
+          });
+        }
+
+        // Set axios header
+        if (token) {
+          axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+        }
+
+        return {
+          success: true,
+          message: res.data.message,
+          verificationRequired: verificationRequired || false,
+          data: {
+            user,
+            roleProfile,
+            token,
+          },
+        };
+      } else {
         return {
           success: false,
-          message: "Invalid role selected",
+          message: res.data.message || "Signup failed",
         };
-    }
-
-    // Append avatar if exists
-    if (formData.avatar) {
-      data.append("avatar", {
-        uri: formData.avatar.uri,
-        type: formData.avatar.type || "image/jpeg",
-        name: formData.avatar.fileName || "avatar.jpg",
-      });
-    }
-
-    // Debug: Log all form data entries
-    console.log("FormData entries being sent:");
-    for (let [key, value] of data._parts) {
-      if (key === 'avatar') {
-        console.log(`${key}: [File Object]`);
-      } else {
-        console.log(`${key}: ${value}`);
       }
-    }
+    } catch (error) {
+      console.error("Signup error details:");
+      console.error("Error object:", error);
+      console.error("Error response:", error.response?.data);
+      console.error("Error message:", error.message);
+      console.error("Error code:", error.code);
 
-    // Make the signup request
-    const res = await axios.post(
-      `${apiUrl}/api/v1/authentication/signup`,
-      data,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        withCredentials: true,
-        timeout: 30000, // 30 seconds timeout
-      }
-    );
+      let errorMessage = "Network error occurred";
+      let errorDetails = null;
 
-    console.log("Signup response:", res.data);
+      if (error.response?.data) {
+        errorMessage =
+          error.response.data.message ||
+          error.response.data.error ||
+          "Registration failed";
+        errorDetails = error.response.data;
 
-    if (res.data.success) {
-      const { token, user, roleProfile, verificationRequired } = res.data.data;
-
-      // Split fullName into first and last name
-      const nameParts = user.fullName.split(" ");
-      const first_name = nameParts[0];
-      const last_name = nameParts.slice(1).join(" ");
-
-      // Prepare data for AsyncStorage
-      const storageData = [
-        ["token", safeValue(token)],
-        ["role", safeValue(user.role)],
-        ["email", safeValue(user.email)],
-        ["first_name", safeValue(first_name)],
-        ["last_name", safeValue(last_name)],
-        ["contact_number", safeValue(formData.contactNumber)],
-        ["userId", safeValue(user._id)],
-        ["linkId", safeValue(user.linkedId)],
-        ["Designatedzone", safeValue(formData.barangay || "")],
-        ["theme", safeValue("light")],
-        ["avatar", safeValue(user.avatar || "")],
-      ];
-
-      // For household_lead, save GPS coordinates if available
-      if (formData.role === "household_lead" && (formData.latitude || formData.gpsCoordinates)) {
-        storageData.push(["latitude", safeValue(formData.latitude || "")]);
-        storageData.push(["longitude", safeValue(formData.longitude || "")]);
-        storageData.push(["gpsCoordinates", safeValue(formData.gpsCoordinates || "")]);
-        
-        console.log("Saved GPS data to AsyncStorage:", {
-          latitude: formData.latitude,
-          longitude: formData.longitude,
-          gpsCoordinates: formData.gpsCoordinates
-        });
+        // Handle validation errors
+        if (error.response.data.errors) {
+          const validationErrors = error.response.data.errors
+            .map((err) => `${err.field || err.path}: ${err.message}`)
+            .join(", ");
+          errorMessage += `: ${validationErrors}`;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
       }
 
-      await AsyncStorage.multiSet(storageData);
-
-      setRole(user.role || "");
-      setEmail(user.email || "");
-      setFirstName(first_name || "");
-      setLastName(last_name || "");
-      setContactNumber(formData.contactNumber || "");
-      setUserID(user._id || "");
-      setLinkId(user.linkedId || "");
-      setDesignatedzone(formData.barangay || "");
-      setAvatar(user.avatar || null);
-
-      // For household_lead, also set GPS coordinates in context
-      if (formData.role === "household_lead") {
-        // You might want to add state setters for these if needed
-        console.log("Household lead GPS coordinates:", {
-          latitude: formData.latitude,
-          longitude: formData.longitude
-        });
+      if (error.code === "ECONNABORTED") {
+        errorMessage =
+          "Request timeout. Please check your internet connection.";
       }
 
-      // Set axios header
-      if (token) {
-        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-      }
-
-      return {
-        success: true,
-        message: res.data.message,
-        verificationRequired: verificationRequired || false,
-        data: {
-          user,
-          roleProfile,
-          token,
-        },
-      };
-    } else {
       return {
         success: false,
-        message: res.data.message || "Signup failed",
+        message: errorMessage,
+        errorDetails: errorDetails,
       };
     }
-  } catch (error) {
-    console.error("Signup error details:");
-    console.error("Error object:", error);
-    console.error("Error response:", error.response?.data);
-    console.error("Error message:", error.message);
-    console.error("Error code:", error.code);
-    
-    let errorMessage = "Network error occurred";
-    let errorDetails = null;
-    
-    if (error.response?.data) {
-      errorMessage = error.response.data.message || error.response.data.error || "Registration failed";
-      errorDetails = error.response.data;
-      
-      // Handle validation errors
-      if (error.response.data.errors) {
-        const validationErrors = error.response.data.errors.map(err => 
-          `${err.field || err.path}: ${err.message}`
-        ).join(", ");
-        errorMessage += `: ${validationErrors}`;
-      }
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-    
-    if (error.code === 'ECONNABORTED') {
-      errorMessage = "Request timeout. Please check your internet connection.";
-    }
-
-    return {
-      success: false,
-      message: errorMessage,
-      errorDetails: errorDetails,
-    };
-  }
-};
+  };
 
   // Check email availability
   const checkEmailAvailability = async (email) => {

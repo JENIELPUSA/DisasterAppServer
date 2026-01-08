@@ -139,27 +139,66 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.4)',
     overflow: 'hidden',
+    // MAS MABABANG Z-INDEX - 50 lang
+    zIndex: 50, // Changed to 50 as requested
   },
-  tabBarBackground: { ...StyleSheet.absoluteFillObject },
-  blurOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.92)' },
+  tabBarBackground: { 
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50, // Also update background z-index
+  },
+  blurOverlay: { 
+    ...StyleSheet.absoluteFillObject, 
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    zIndex: 50,
+  },
   activeIndicator: {
     position: 'absolute',
     height: 4,
     backgroundColor: "#0e7490",
     bottom: 0,
     borderRadius: 2,
+    zIndex: 51, // Slightly higher than container but still low
   },
-  tabItem: { justifyContent: "center", alignItems: "center", height: '100%' },
-  tabContent: { justifyContent: 'center', alignItems: 'center', height: '100%' },
-  iconContainer: { justifyContent: 'center', alignItems: 'center' },
-  gradientIcon: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
-  regularIcon: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
+  tabItem: { 
+    justifyContent: "center", 
+    alignItems: "center", 
+    height: '100%',
+    zIndex: 52, // Higher than indicator
+  },
+  tabContent: { 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    height: '100%',
+    zIndex: 53,
+  },
+  iconContainer: { 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    zIndex: 54,
+  },
+  gradientIcon: { 
+    width: 56, 
+    height: 56, 
+    borderRadius: 28, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    zIndex: 55,
+  },
+  regularIcon: { 
+    width: 56, 
+    height: 56, 
+    borderRadius: 28, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: 'transparent',
+    zIndex: 55,
+  },
 });
 
 // Main Tabs Component
 export default function MainTabs() {
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, zIndex: 50 }}> {/* Add zIndex to parent container too */}
       <Tab.Navigator
         screenOptions={{ headerShown: false, unmountOnBlur: false, lazy: true }}
         tabBar={(props) => <CustomTabBar {...props} />}

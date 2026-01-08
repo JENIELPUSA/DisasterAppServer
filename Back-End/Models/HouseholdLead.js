@@ -12,6 +12,9 @@ const householdLeadSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  verificationCode: {
+    type: String,
+  },
   familyMembers: {
     type: Number,
     required: [true, "Number of family members is required"],
@@ -21,30 +24,29 @@ const householdLeadSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Barangay",
   },
-
-  // Household Information
   householdCode: {
     type: String,
     unique: true,
   },
   totalMembers: {
     type: Number,
-    default: 1, // Starts with 1 (the lead)
+    default: 1,
   },
-
-  // Emergency Information
+  rescueStatus: {
+    type: String,
+    enum: ["none", "pending", "in_progress", "rescued", "cancelled"],
+    default: "none",
+  },
   emergencyContact: {
     type: String,
   },
-
-  // Status
   isFull: {
     type: Boolean,
     default: false,
   },
   location: {
     latitude: { type: Number, required: true },
-    longitude: { type: Number, required: true }
+    longitude: { type: Number, required: true },
   },
 
   // Timestamps

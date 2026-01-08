@@ -94,7 +94,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
-        missingDimensionStrategy 'react-native-maplibre', 'general'
+
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
     signingConfigs {
@@ -122,16 +122,11 @@ android {
         }
     }
     packagingOptions {
-    jniLibs {
-        def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
-        useLegacyPackaging enableLegacyPackaging.toBoolean()
+        jniLibs {
+            def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
+            useLegacyPackaging enableLegacyPackaging.toBoolean()
+        }
     }
-    pickFirst 'lib/arm64-v8a/libworklets.so'
-    pickFirst 'lib/x86_64/libworklets.so'
-    pickFirst 'lib/x86/libworklets.so'
-    pickFirst 'lib/armeabi-v7a/libworklets.so'
-}
-
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }

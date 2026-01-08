@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -16,16 +16,17 @@ import {
 import { WebView } from "react-native-webview";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import * as Location from 'expo-location';
+import * as Location from "expo-location";
 
-export default function RegisterBarangayForm({ 
-  addBarangay, 
-  onClose, 
-  visible, 
-  selectedMunicipality, 
+export default function RegisterBarangayForm({
+  addBarangay,
+  onClose,
+  municipalities = [], // Default to empty array
+  visible,
+  selectedMunicipality,
   initialData = null,
   isEditing = false,
-  onSubmit
+  onSubmit,
 }) {
   const [barangayName, setBarangayName] = useState("");
   const [fullAddress, setFullAddress] = useState("");
@@ -33,6 +34,7 @@ export default function RegisterBarangayForm({
   const [marker, setMarker] = useState(null);
   const [showMap, setShowMap] = useState(false);
   const [selectedMunicipalityInternal, setSelectedMunicipalityInternal] = useState("");
+  const [selectedMunicipalityId, setSelectedMunicipalityId] = useState("");
   const [mapHtml, setMapHtml] = useState("");
   const [currentStep, setCurrentStep] = useState(0);
   const [formErrors, setFormErrors] = useState({});
@@ -42,70 +44,139 @@ export default function RegisterBarangayForm({
   const [userLocation, setUserLocation] = useState(null);
   const webViewRef = useRef(null);
   const { width, height } = Dimensions.get("window");
-  const municipalityData = {
-    "Almeria": { lat: 11.620590, lng: 124.381579 },
-    "Biliran": { lat: 11.466732, lng: 124.474025 },
-    "Cabucgayan": { lat: 11.473962, lng: 124.574919 },
-    "Caibiran": { lat: 11.572213, lng: 124.581508 },
-    "Culaba": { lat: 11.655504, lng: 124.540672 },
-    "Kawayan": { lat: 11.679893, lng: 124.357463 },
-    "Maripipi": { lat: 11.783, lng: 124.350 },
-    "Naval (Capital)": { lat: 11.561925, lng: 124.396305 }
+
+  // Helper function to get municipality by ID with safety check
+  const getMunicipalityById = (id) => {
+    if (!municipalities || !Array.isArray(municipalities)) return null;
+    // Try to find by _id first, then by id
+    return municipalities.find((mun) => mun._id === id || mun.id === id) || null;
   };
 
-  const municipalities = Object.keys(municipalityData);
+  // Helper function to get municipality by name with safety check
+  const getMunicipalityByName = (name) => {
+    if (!municipalities || !Array.isArray(municipalities)) return null;
+    return municipalities.find((mun) => mun.municipalityName === name) || null;
+  };
 
-  // UPDATED: Populate form when editing
+  // Gamitin ang municipalities mula sa props at gawing municipalityData
+  const municipalityData = useMemo(() => {
+    if (
+      !municipalities ||
+      !Array.isArray(municipalities) ||
+      municipalities.length === 0
+    ) {
+      return {};
+    }
+
+    // Convert municipalities array to municipalityData object
+    const data = {};
+    municipalities.forEach((municipality) => {
+      const name = municipality.municipalityName;
+
+      // Gumamit ng coordinates mula sa municipality object
+      if (
+        municipality.coordinates &&
+        municipality.coordinates.lat &&
+        municipality.coordinates.lng
+      ) {
+        data[name] = {
+          lat: municipality.coordinates.lat,
+          lng: municipality.coordinates.lng,
+        };
+      } else if (municipality.latitude && municipality.longitude) {
+        data[name] = {
+          lat: municipality.latitude,
+          lng: municipality.longitude,
+        };
+      } else {
+        // Kung walang coordinates, gamitin ang default center ng Biliran
+        data[name] = { lat: 11.5833, lng: 124.4647 };
+      }
+    });
+
+    return data;
+  }, [municipalities]);
+
+  // UPDATED: Populate form when editing - USING "id" FIELD NOT "_id"
   useEffect(() => {
     if (visible) {
       if (isEditing && initialData) {
         setBarangayName(initialData.barangayName || "");
-        setSelectedMunicipalityInternal(initialData.municipality || "");
-        
-        // Handle coordinates - they might be stored differently
+
+        // Handle municipality - could be ID or name
+        if (initialData.municipality) {
+          // Check if it's an ID (ObjectId format) or name
+          if (initialData.municipality.match(/^[0-9a-fA-F]{24}$/)) {
+            // It's an ID
+            const municipalityObj = getMunicipalityById(initialData.municipality);
+            if (municipalityObj) {
+              // Use id field (not _id) if available
+              setSelectedMunicipalityId(municipalityObj.id || municipalityObj._id || initialData.municipality);
+              setSelectedMunicipalityInternal(municipalityObj.municipalityName);
+            } else {
+              setSelectedMunicipalityId(initialData.municipality);
+              setSelectedMunicipalityInternal("Unknown Municipality");
+            }
+          } else {
+            // It's a name
+            const municipalityObj = getMunicipalityByName(initialData.municipality);
+            if (municipalityObj) {
+              // Use id field (not _id) if available
+              setSelectedMunicipalityId(municipalityObj.id || municipalityObj._id);
+              setSelectedMunicipalityInternal(municipalityObj.municipalityName);
+            } else {
+              setSelectedMunicipalityInternal(initialData.municipality);
+            }
+          }
+        }
+
+        // Handle coordinates
         if (initialData.coordinates) {
           setMarker({
-            latitude: initialData.coordinates.latitude || initialData.coordinates.lat,
-            longitude: initialData.coordinates.longitude || initialData.coordinates.lng,
-            address: initialData.fullAddress || ""
+            latitude:
+              initialData.coordinates.latitude || initialData.coordinates.lat,
+            longitude:
+              initialData.coordinates.longitude || initialData.coordinates.lng,
+            address: initialData.fullAddress || "",
           });
           setFullAddress(initialData.fullAddress || "");
         } else if (initialData.latitude && initialData.longitude) {
           setMarker({
             latitude: initialData.latitude,
             longitude: initialData.longitude,
-            address: initialData.fullAddress || ""
+            address: initialData.fullAddress || "",
           });
           setFullAddress(initialData.fullAddress || "");
         }
-        
-        validateField('municipality', initialData.municipality || "");
+
+        validateField("municipality", initialData.municipality || "");
       } else {
         // Reset form for adding new barangay
         resetForm();
         if (selectedMunicipality) {
-          const municipalityName = selectedMunicipality.name || selectedMunicipality;
-          setSelectedMunicipalityInternal(municipalityName);
-          validateField('municipality', municipalityName);
+          // Automatically set municipality from selectedMunicipality prop
+          // IMPORTANT: Use selectedMunicipality.id NOT selectedMunicipality._id
+          setSelectedMunicipalityId(selectedMunicipality.id); // ✅ This is the ID to save
+          setSelectedMunicipalityInternal(selectedMunicipality.name);
+          validateField("municipality", selectedMunicipality.name);
         }
       }
     }
   }, [visible, isEditing, initialData, selectedMunicipality]);
 
-  // Calculate current step
+  // Calculate current step - REMOVED MUNICIPALITY STEP
   useEffect(() => {
     let step = 0;
     if (barangayName.trim()) step = 1;
-    if (selectedMunicipalityInternal) step = 2;
-    if (marker) step = 3;
+    if (marker) step = 2; // Only 2 steps now: Barangay Name and Location
     setCurrentStep(step);
-  }, [barangayName, selectedMunicipalityInternal, marker]);
+  }, [barangayName, marker]);
 
   const getCurrentLocation = async () => {
     try {
       setIsGettingLocation(true);
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      if (status !== "granted") {
         Alert.alert(
           "Permission Denied",
           "Location permission is required to use GPS. Please enable it in your device settings.",
@@ -121,14 +192,14 @@ export default function RegisterBarangayForm({
       const { latitude, longitude } = location.coords;
       const biliranBounds = {
         north: 11.85,
-        south: 11.40,
-        west: 124.30,
-        east: 124.65
+        south: 11.4,
+        west: 124.3,
+        east: 124.65,
       };
       if (
-        latitude < biliranBounds.south || 
-        latitude > biliranBounds.north || 
-        longitude < biliranBounds.west || 
+        latitude < biliranBounds.south ||
+        latitude > biliranBounds.north ||
+        longitude < biliranBounds.west ||
         longitude > biliranBounds.east
       ) {
         Alert.alert(
@@ -179,9 +250,6 @@ export default function RegisterBarangayForm({
     if (!barangayName.trim()) {
       errors.barangayName = "Please enter Barangay Name.";
     }
-    if (!selectedMunicipalityInternal) {
-      errors.municipality = "Please select a Municipality.";
-    }
     if (!fullAddress.trim() || !marker) {
       errors.location = "Please select a location on the map.";
     }
@@ -192,21 +260,20 @@ export default function RegisterBarangayForm({
   const validateField = (field, value) => {
     const errors = { ...formErrors };
     switch (field) {
-      case 'barangayName':
-        errors.barangayName = !value.trim() ? 'Please enter Barangay Name.' : '';
+      case "barangayName":
+        errors.barangayName = !value.trim()
+          ? "Please enter Barangay Name."
+          : "";
         break;
-      case 'municipality':
-        errors.municipality = !value ? 'Please select a Municipality.' : '';
-        break;
-      case 'location':
-        errors.location = !value ? 'Please select a location on the map.' : '';
+      case "location":
+        errors.location = !value ? "Please select a location on the map." : "";
         break;
     }
     setFormErrors(errors);
   };
 
   const FormProgress = () => {
-    const steps = ['Barangay', 'Municipality', 'Location', 'Review'];
+    const steps = ["Barangay", "Location", "Review"]; // REMOVED MUNICIPALITY STEP
     return (
       <View className="px-6 pt-5">
         <Text className="text-gray-600 text-sm font-medium mb-4">
@@ -216,24 +283,30 @@ export default function RegisterBarangayForm({
           {steps.map((step, index) => (
             <React.Fragment key={step}>
               <View className="flex-1 items-center">
-                <View className={`w-8 h-8 rounded-full items-center justify-center ${
-                  index <= currentStep ? 'bg-cyan-600' : 'bg-gray-200'
-                }`}>
+                <View
+                  className={`w-8 h-8 rounded-full items-center justify-center ${
+                    index <= currentStep ? "bg-cyan-600" : "bg-gray-200"
+                  }`}
+                >
                   {index < currentStep ? (
                     <MaterialIcons name="check" size={16} color="white" />
                   ) : (
-                    <Text className={`font-bold ${
-                      index <= currentStep ? 'text-white' : 'text-gray-500'
-                    }`}>
+                    <Text
+                      className={`font-bold ${
+                        index <= currentStep ? "text-white" : "text-gray-500"
+                      }`}
+                    >
                       {index + 1}
                     </Text>
                   )}
                 </View>
               </View>
               {index < steps.length - 1 && (
-                <View className={`flex-1 h-1 mt-3.5 ${
-                  index < currentStep ? 'bg-cyan-600' : 'bg-gray-200'
-                }`} />
+                <View
+                  className={`flex-1 h-1 mt-3.5 ${
+                    index < currentStep ? "bg-cyan-600" : "bg-gray-200"
+                  }`}
+                />
               )}
             </React.Fragment>
           ))}
@@ -241,9 +314,11 @@ export default function RegisterBarangayForm({
         <View className="flex-row mb-6">
           {steps.map((step, index) => (
             <View key={step} className="flex-1 items-center">
-              <Text className={`text-xs font-medium mt-1.5 ${
-                index <= currentStep ? 'text-cyan-600' : 'text-gray-400'
-              }`}>
+              <Text
+                className={`text-xs font-medium mt-1.5 ${
+                  index <= currentStep ? "text-cyan-600" : "text-gray-400"
+                }`}
+              >
                 {step}
               </Text>
             </View>
@@ -255,24 +330,27 @@ export default function RegisterBarangayForm({
 
   const biliranBounds = {
     north: 11.85,
-    south: 11.40,
-    west: 124.30,
-    east: 124.65
+    south: 11.4,
+    west: 124.3,
+    east: 124.65,
   };
 
   const generateMapHtml = (municipality = null) => {
     const biliranCenter = {
       lat: (biliranBounds.north + biliranBounds.south) / 2,
-      lng: (biliranBounds.west + biliranBounds.east) / 2
+      lng: (biliranBounds.west + biliranBounds.east) / 2,
     };
     let initialLat = biliranCenter.lat;
     let initialLng = biliranCenter.lng;
     let initialZoom = 10;
+
+    // Gamitin ang coordinates mula sa municipalityData
     if (municipality && municipalityData[municipality]) {
       initialLat = municipalityData[municipality].lat;
       initialLng = municipalityData[municipality].lng;
       initialZoom = 14;
     }
+
     return `
       <!DOCTYPE html>
       <html>
@@ -356,11 +434,16 @@ export default function RegisterBarangayForm({
               weight: 3,
               fillOpacity: 0.1
             }).addTo(map);
-            ${!municipality ? `
+            ${
+              !municipality
+                ? `
               const municipalities = {
-                ${Object.entries(municipalityData).map(([name, coords]) => 
-                  `"${name}": [${coords.lat}, ${coords.lng}]`
-                ).join(',')}
+                ${Object.entries(municipalityData)
+                  .map(
+                    ([name, coords]) =>
+                      `"${name}": [${coords.lat}, ${coords.lng}]`
+                  )
+                  .join(",")}
               };
               Object.keys(municipalities).forEach(mun => {
                 const coords = municipalities[mun];
@@ -376,9 +459,21 @@ export default function RegisterBarangayForm({
                   className: 'municipality-tooltip'
                 });
               });
-            ` : ''}
-            ${municipality ? `
-              const munCoords = [${municipalityData[municipality].lat}, ${municipalityData[municipality].lng}];
+            `
+                : ""
+            }
+            ${
+              municipality
+                ? `
+              const munCoords = [${
+                municipalityData[municipality]
+                  ? municipalityData[municipality].lat
+                  : initialLat
+              }, ${
+                    municipalityData[municipality]
+                      ? municipalityData[municipality].lng
+                      : initialLng
+                  }];
               L.marker(munCoords, {
                 icon: L.divIcon({
                   className: 'municipality-marker',
@@ -389,11 +484,15 @@ export default function RegisterBarangayForm({
                 direction: 'top',
                 className: 'municipality-tooltip'
               });
-            ` : ''}
+            `
+                : ""
+            }
             map.on('click', function(e) {
               const lat = e.latlng.lat;
               const lng = e.latlng.lng;
-              if(lat < ${biliranBounds.south} || lat > ${biliranBounds.north} || 
+              if(lat < ${biliranBounds.south} || lat > ${
+      biliranBounds.north
+    } || 
                  lng < ${biliranBounds.west} || lng > ${biliranBounds.east}) {
                 alert("Please select a location within Biliran Province (red rectangle area).");
                 return;
@@ -401,7 +500,9 @@ export default function RegisterBarangayForm({
               setBarangayMarker(lat, lng);
             });
             window.setBarangayMarker = function(lat, lng) {
-              if(lat < ${biliranBounds.south} || lat > ${biliranBounds.north} || 
+              if(lat < ${biliranBounds.south} || lat > ${
+      biliranBounds.north
+    } || 
                  lng < ${biliranBounds.west} || lng > ${biliranBounds.east}) {
                 alert("Location is outside Biliran Province. Please select within red rectangle.");
                 return false;
@@ -459,9 +560,13 @@ export default function RegisterBarangayForm({
                 });
               }
             };
-            ${!municipality ? `
+            ${
+              !municipality
+                ? `
               map.fitBounds(bounds, { padding: [50, 50] });
-            ` : ''}
+            `
+                : ""
+            }
             setTimeout(() => {
               window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'map_ready' }));
             }, 500);
@@ -479,20 +584,16 @@ export default function RegisterBarangayForm({
     }
   }, [visible]);
 
-  const handleMunicipalitySelect = (mun) => {
-    setSelectedMunicipalityInternal(mun);
-    validateField('municipality', mun);
-  };
-
   const openMapForMunicipality = () => {
-    if (!selectedMunicipalityInternal) {
-      Alert.alert("Select Municipality", "Please select a municipality first.");
-      return;
-    }
+    // Simplified: Tanging barangayName lang ang kailangan
     if (!barangayName.trim()) {
-      Alert.alert("Enter Barangay Name", "Please enter the barangay name before pinning location.");
+      Alert.alert(
+        "Enter Barangay Name",
+        "Please enter the barangay name before pinning location."
+      );
       return;
     }
+    
     const html = generateMapHtml(selectedMunicipalityInternal);
     setMapHtml(html);
     setShowMap(true);
@@ -500,39 +601,49 @@ export default function RegisterBarangayForm({
   };
 
   const handleSelectFromWebView = async (data) => {
-    if (data.type === 'map_ready') {
+    if (data.type === "map_ready") {
       setIsMapReady(true);
       return;
     }
-    if (data.type === 'location_selected' || data.type === 'location_updated') {
+    
+    if (data.type === "location_selected" || data.type === "location_updated") {
       const { latitude, longitude } = data;
       try {
-        if (!selectedMunicipalityInternal) {
-          Alert.alert("Error", "No municipality selected. Please select a municipality first.");
-          return;
-        }
+        // TANDAAN: Hindi na kailangan mag-check ng municipality dito
+        // dahil ito ay pre-selected na
+        
         const result = await reverseGeocode(latitude, longitude);
-        const fullAddressText = buildFullAddress(barangayName, selectedMunicipalityInternal, result.addressDetails);
-        setMarker({ 
-          latitude, 
-          longitude, 
+        const municipalityName = selectedMunicipalityInternal; // Gamitin ang pre-selected
+        const fullAddressText = buildFullAddress(
+          barangayName,
+          municipalityName,
+          result.addressDetails
+        );
+        
+        setMarker({
+          latitude,
+          longitude,
           address: fullAddressText,
-          municipality: selectedMunicipalityInternal,
-          barangay: barangayName
+          municipality: selectedMunicipalityId,
+          barangay: barangayName,
         });
+        
         setFullAddress(fullAddressText);
-        validateField('location', 'selected');
-        if (data.type === 'location_selected') {
+        validateField("location", "selected");
+        
+        if (data.type === "location_selected") {
           Alert.alert(
             "Location Pinned",
             `Barangay: ${barangayName}
-Municipality: ${selectedMunicipalityInternal}
+Municipality: ${municipalityName}
 Coordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}
 You can drag the marker to adjust the position.`,
-            [{ 
-              text: "OK", 
-              onPress: () => {}
-            }]
+            [
+              {
+                text: "OK",
+                onPress: () => {},
+              },
+            ]
           );
         }
       } catch (error) {
@@ -567,18 +678,38 @@ You can drag the marker to adjust the position.`,
         addressdetails: 1,
         zoom: 16,
       });
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, {
-        headers: { 
-          'User-Agent': 'SagipBayanApp/1.0 (sagipbayan.app@gmail.com)',
-          'Accept': 'application/json' 
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?${params}`,
+        {
+          headers: {
+            "User-Agent": "SagipBayanApp/1.0 (sagipbayan.app@gmail.com)",
+            Accept: "application/json",
+          },
         }
-      });
+      );
       const data = await response.json();
       return { addressDetails: data.address || {} };
     } catch (err) {
       console.error("Reverse geocode error:", err);
       return { addressDetails: {} };
     }
+  };
+
+  const getSubmitButtonState = () => {
+    // Tanging barangayName at marker lang ang kailangan
+    // Ang municipality ay pre-selected na kaya hindi na kailangan icheck
+    if (!barangayName || !marker) {
+      return {
+        bg: "bg-gray-300",
+        text: "Complete All Steps to Save",
+        disabled: true,
+      };
+    }
+    return {
+      bg: "bg-cyan-600",
+      text: isEditing ? "Update Barangay Location" : "Save Barangay Location",
+      disabled: false,
+    };
   };
 
   const handleSubmit = () => {
@@ -591,15 +722,16 @@ You can drag the marker to adjust the position.`,
       return;
     }
 
+    // ✅ IMPORTANT: Save the municipality ID (selectedMunicipalityId) which comes from selectedMunicipality.id
     const locationData = {
       barangayName: barangayName.trim(),
-      municipality: selectedMunicipalityInternal,
+      municipality: selectedMunicipalityId, // ✅ This is the "id" from selectedMunicipality
       fullAddress: fullAddress.trim(),
-      coordinates: { 
-        latitude: marker.latitude, 
-        longitude: marker.longitude 
+      coordinates: {
+        latitude: marker.latitude,
+        longitude: marker.longitude,
       },
-      dateAdded: new Date().toISOString()
+      dateAdded: new Date().toISOString(),
     };
 
     // If editing, include the ID
@@ -607,33 +739,42 @@ You can drag the marker to adjust the position.`,
       locationData.id = initialData._id || initialData.id;
     }
 
+    // Get municipality name for display
+    const municipalityObj = getMunicipalityById(selectedMunicipalityId);
+    const municipalityName = municipalityObj
+      ? municipalityObj.municipalityName
+      : selectedMunicipalityInternal;
+
     Alert.alert(
       isEditing ? "Confirm Barangay Update" : "Confirm Barangay Registration",
       `Barangay: ${locationData.barangayName}
-Municipality: ${locationData.municipality}
+Municipality: ${municipalityName}
+Municipality ID: ${selectedMunicipalityId}
 Full Address: ${locationData.fullAddress}
-Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coordinates.longitude.toFixed(6)}`,
+Coordinates: ${locationData.coordinates.latitude.toFixed(
+        6
+      )}, ${locationData.coordinates.longitude.toFixed(6)}`,
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: isEditing ? "Update Barangay" : "Save Barangay", 
+        {
+          text: isEditing ? "Update Barangay" : "Save Barangay",
           onPress: () => {
             if (isEditing && onSubmit) {
-              // Call the onSubmit prop for editing
               onSubmit(locationData);
             } else if (addBarangay) {
-              // Call the addBarangay prop for adding new
               addBarangay(locationData);
             }
-            
+
             Alert.alert(
-              "Success", 
-              isEditing ? "Barangay updated successfully!" : "Barangay registered successfully!"
+              "Success",
+              isEditing
+                ? "Barangay updated successfully!"
+                : "Barangay registered successfully!"
             );
             resetForm();
             if (onClose) onClose();
-          }
-        }
+          },
+        },
       ]
     );
   };
@@ -643,6 +784,7 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
     setFullAddress("");
     setMarker(null);
     setSelectedMunicipalityInternal("");
+    setSelectedMunicipalityId("");
     setMapHtml("");
     setCurrentStep(0);
     setFormErrors({});
@@ -656,26 +798,14 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
     if (onClose) onClose();
   };
 
-  const getSubmitButtonState = () => {
-    if (!barangayName || !selectedMunicipalityInternal || !marker) {
-      return { 
-        bg: 'bg-gray-300', 
-        text: 'Complete All Steps to Save',
-        disabled: true
-      };
-    }
-    return { 
-      bg: 'bg-cyan-600', 
-      text: isEditing ? 'Update Barangay Location' : 'Save Barangay Location',
-      disabled: false
-    };
-  };
-
   const submitButtonState = getSubmitButtonState();
 
   const handleConfirmLocation = () => {
     if (!marker) {
-      Alert.alert("No Location Selected", "Please select a location on the map first.");
+      Alert.alert(
+        "No Location Selected",
+        "Please select a location on the map first."
+      );
       return;
     }
     setShowMap(false);
@@ -702,12 +832,11 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                 {isEditing ? "Edit Barangay" : "Register Barangay"}
               </Text>
               <Text className="text-gray-500 text-sm mt-1">
-                {isEditing 
+                {isEditing
                   ? `Editing ${barangayName || "barangay"}`
-                  : selectedMunicipality 
-                    ? `Adding barangay in ${selectedMunicipality.name || selectedMunicipality}` 
-                    : "Add new barangay for emergency response"
-                }
+                  : selectedMunicipality
+                  ? `Adding barangay in ${selectedMunicipality.name}`
+                  : "Add new barangay for emergency response"}
               </Text>
             </View>
             <TouchableOpacity
@@ -721,8 +850,8 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
 
         <FormProgress />
 
-        <ScrollView 
-          className="flex-1" 
+        <ScrollView
+          className="flex-1"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 30 }}
         >
@@ -730,7 +859,11 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
             <View className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
               <View className="flex-row items-center mb-4">
                 <View className="w-8 h-8 rounded-full bg-cyan-100 items-center justify-center mr-3">
-                  <MaterialIcons name="location-city" size={20} color="#0891B2" />
+                  <MaterialIcons
+                    name="location-city"
+                    size={20}
+                    color="#0891B2"
+                  />
                 </View>
                 <Text className="text-lg font-semibold text-gray-800">
                   Barangay Information
@@ -742,90 +875,48 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                 </Text>
                 {formErrors.barangayName && (
                   <View className="flex-row items-center mb-2">
-                    <MaterialIcons name="error-outline" size={16} color="#EF4444" />
-                    <Text className="text-red-500 text-xs ml-1">{formErrors.barangayName}</Text>
+                    <MaterialIcons
+                      name="error-outline"
+                      size={16}
+                      color="#EF4444"
+                    />
+                    <Text className="text-red-500 text-xs ml-1">
+                      {formErrors.barangayName}
+                    </Text>
                   </View>
                 )}
-                <TextInput 
-                  value={barangayName} 
+                <TextInput
+                  value={barangayName}
                   onChangeText={(text) => {
                     setBarangayName(text);
-                    validateField('barangayName', text);
-                  }} 
-                  placeholder="Enter Barangay Name" 
+                    validateField("barangayName", text);
+                  }}
+                  placeholder="Enter Barangay Name"
                   className="bg-gray-50 rounded-lg px-4 py-3.5 border border-gray-200 text-base"
-                  onBlur={() => validateField('barangayName', barangayName)}
+                  onBlur={() => validateField("barangayName", barangayName)}
                 />
               </View>
-            </View>
-          </View>
-
-          <View className="px-6 mb-6">
-            <View className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-              <View className="flex-row items-center mb-4">
-                <View className="w-8 h-8 rounded-full bg-cyan-100 items-center justify-center mr-3">
-                  <MaterialIcons name="map" size={20} color="#0891B2" />
-                </View>
-                <Text className="text-lg font-semibold text-gray-800">
-                  Select Municipality
-                </Text>
-              </View>
-              <View className="mb-1">
+              
+              {/* Municipality Display (Read-only) - Show the ID */}
+              <View className="mt-4">
                 <Text className="text-gray-700 text-sm mb-2 font-medium">
                   Municipality *
                 </Text>
-                {formErrors.municipality && (
-                  <View className="flex-row items-center mb-2">
-                    <MaterialIcons name="error-outline" size={16} color="#EF4444" />
-                    <Text className="text-red-500 text-xs ml-1">{formErrors.municipality}</Text>
-                  </View>
-                )}
-                <Text className="text-gray-500 text-xs mb-3">
-                  {selectedMunicipality 
-                    ? `Municipality pre-selected: ${selectedMunicipality.name || selectedMunicipality}`
-                    : "Select a municipality for the barangay"}
-                </Text>
-                <View className="flex-row flex-wrap -mx-1">
-                  {municipalities.map((mun) => (
-                    <TouchableOpacity
-                      key={mun}
-                      onPress={() => handleMunicipalitySelect(mun)}
-                      className={`px-4 py-2.5 rounded-lg m-1 border ${
-                        selectedMunicipalityInternal === mun 
-                          ? 'bg-cyan-600 border-cyan-600' 
-                          : 'bg-gray-50 border-gray-300'
-                      }`}
-                    >
-                      <Text className={`text-sm font-medium ${
-                        selectedMunicipalityInternal === mun 
-                          ? 'text-white' 
-                          : 'text-gray-700'
-                      }`}>
-                        {mun}
+                <View className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <Text className="text-gray-800 font-medium">
+                    {selectedMunicipalityInternal || "Municipality not set"}
+                  </Text>
+                  {selectedMunicipality && (
+                    <View>
+                      <Text className="text-gray-500 text-xs mt-1">
+                        Automatically selected from previous screen
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                {selectedMunicipalityInternal && (
-                  <View className="mt-4 p-4 bg-cyan-50 rounded-lg border-l-4 border-cyan-500">
-                    <View className="flex-row items-center">
-                      <MaterialIcons name="check-circle" size={20} color="#0891B2" />
-                      <View className="ml-3">
-                        <Text className="text-sm text-gray-600">
-                          Selected Municipality:
-                        </Text>
-                        <Text className="font-bold text-cyan-800 text-lg">
-                          {selectedMunicipalityInternal}
-                        </Text>
-                        {selectedMunicipality && selectedMunicipality.name === selectedMunicipalityInternal && (
-                          <Text className="text-xs text-cyan-600 mt-1">
-                            (Automatically selected from previous screen)
-                          </Text>
-                        )}
-                      </View>
+                      <Text className="text-gray-500 text-xs mt-1">
+                        ID: {selectedMunicipalityId}
+                      </Text>
                     </View>
-                  </View>
-                )}
+                  )}
+                </View>
               </View>
             </View>
           </View>
@@ -846,39 +937,47 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                 </Text>
                 {formErrors.location && (
                   <View className="flex-row items-center mb-2">
-                    <MaterialIcons name="error-outline" size={16} color="#EF4444" />
-                    <Text className="text-red-500 text-xs ml-1">{formErrors.location}</Text>
+                    <MaterialIcons
+                      name="error-outline"
+                      size={16}
+                      color="#EF4444"
+                    />
+                    <Text className="text-red-500 text-xs ml-1">
+                      {formErrors.location}
+                    </Text>
                   </View>
                 )}
                 <TouchableOpacity
                   onPress={openMapForMunicipality}
-                  disabled={!selectedMunicipalityInternal || !barangayName.trim()}
+                  disabled={!barangayName.trim()} // Tanging barangayName lang
                   className={`rounded-lg p-4 mb-4 flex-row items-center justify-center ${
-                    !selectedMunicipalityInternal || !barangayName.trim() 
-                      ? 'bg-gray-100 border border-gray-300' 
-                      : 'bg-cyan-600 border border-cyan-700'
+                    !barangayName.trim()
+                      ? "bg-gray-100 border border-gray-300"
+                      : "bg-cyan-600 border border-cyan-700"
                   }`}
                 >
-                  <MaterialIcons 
-                    name="push-pin" 
-                    size={24} 
-                    color={!selectedMunicipalityInternal || !barangayName.trim() ? "#9CA3AF" : "white"} 
+                  <MaterialIcons
+                    name="push-pin"
+                    size={24}
+                    color={
+                      !barangayName.trim()
+                        ? "#9CA3AF"
+                        : "white"
+                    }
                   />
-                  <Text className={`ml-3 font-semibold text-lg ${
-                    !selectedMunicipalityInternal || !barangayName.trim() 
-                      ? 'text-gray-500' 
-                      : 'text-white'
-                  }`}>
+                  <Text
+                    className={`ml-3 font-semibold text-lg ${
+                      !barangayName.trim()
+                        ? "text-gray-500"
+                        : "text-white"
+                    }`}
+                  >
                     Pin Barangay Location on Map
                   </Text>
                 </TouchableOpacity>
-                {(!selectedMunicipalityInternal || !barangayName.trim()) && (
+                {!barangayName.trim() && (
                   <Text className="text-red-500 text-sm mb-3 text-center">
-                    {!selectedMunicipalityInternal && !barangayName.trim() 
-                      ? "Enter barangay name and select municipality first" 
-                      : !selectedMunicipalityInternal 
-                        ? "Select a municipality first" 
-                        : "Enter barangay name first"}
+                    Enter barangay name first
                   </Text>
                 )}
                 <View className="bg-gray-50 rounded-lg p-4 border border-gray-200 min-h-20">
@@ -889,21 +988,27 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                       </Text>
                       {marker && (
                         <View className="flex-row items-center mt-2">
-                          <MaterialIcons name="gps-fixed" size={16} color="#0891B2" />
+                          <MaterialIcons
+                            name="gps-fixed"
+                            size={16}
+                            color="#0891B2"
+                          />
                           <Text className="text-cyan-600 text-sm ml-2">
-                            Coordinates: {marker.latitude.toFixed(6)}, {marker.longitude.toFixed(6)}
+                            Coordinates: {marker.latitude.toFixed(6)},{" "}
+                            {marker.longitude.toFixed(6)}
                           </Text>
                         </View>
                       )}
                     </View>
                   ) : (
                     <View className="flex-row items-center justify-center h-full">
-                      <MaterialIcons name="location-off" size={24} color="#9CA3AF" />
+                      <MaterialIcons
+                        name="location-off"
+                        size={24}
+                        color="#9CA3AF"
+                      />
                       <Text className="text-gray-400 text-base ml-2 text-center">
-                        {selectedMunicipalityInternal 
-                          ? "Click 'Pin Barangay Location' to select location on map"
-                          : "Select a municipality first, then pin location on map"
-                        }
+                        Click 'Pin Barangay Location' to select location on map
                       </Text>
                     </View>
                   )}
@@ -912,7 +1017,11 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
               {marker && (
                 <View className="p-4 bg-green-50 rounded-lg border-l-4 border-green-500">
                   <View className="flex-row items-start">
-                    <MaterialIcons name="check-circle" size={24} color="#059669" />
+                    <MaterialIcons
+                      name="check-circle"
+                      size={24}
+                      color="#059669"
+                    />
                     <View className="ml-3 flex-1">
                       <Text className="font-bold text-green-800 mb-1">
                         ✅ Location Pinned Successfully
@@ -921,13 +1030,18 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                         {marker.address}
                       </Text>
                       <Text className="text-xs text-gray-500">
-                        Coordinates: {marker.latitude.toFixed(6)}, {marker.longitude.toFixed(6)}
+                        Coordinates: {marker.latitude.toFixed(6)},{" "}
+                        {marker.longitude.toFixed(6)}
                       </Text>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         onPress={() => setShowMap(true)}
                         className="mt-3 flex-row items-center"
                       >
-                        <MaterialIcons name="edit-location" size={18} color="#0891B2" />
+                        <MaterialIcons
+                          name="edit-location"
+                          size={18}
+                          color="#0891B2"
+                        />
                         <Text className="text-cyan-600 text-sm font-medium ml-2">
                           Edit or Adjust Location on Map
                         </Text>
@@ -947,35 +1061,62 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                 </View>
                 <View className="flex-1">
                   <Text className="text-cyan-800 font-semibold text-lg mb-3">
-                    {isEditing ? "Editing Barangay Information" : "How to Register a Barangay"}
+                    {isEditing
+                      ? "Editing Barangay Information"
+                      : "How to Register a Barangay"}
                   </Text>
                   <View style={styles.spaceContainer}>
                     <View style={styles.rowContainer}>
-                      <MaterialIcons name="check-circle" size={16} color="#0891B2" style={styles.iconStyle} />
+                      <MaterialIcons
+                        name="check-circle"
+                        size={16}
+                        color="#0891B2"
+                        style={styles.iconStyle}
+                      />
                       <Text className="text-cyan-700 text-sm ml-2 flex-1">
                         1. Enter the barangay name
                       </Text>
                     </View>
                     <View style={styles.rowContainer}>
-                      <MaterialIcons name="check-circle" size={16} color="#0891B2" style={styles.iconStyle} />
+                      <MaterialIcons
+                        name="check-circle"
+                        size={16}
+                        color="#0891B2"
+                        style={styles.iconStyle}
+                      />
                       <Text className="text-cyan-700 text-sm ml-2 flex-1">
-                        2. {selectedMunicipality && !isEditing ? "Municipality is pre-selected" : "Select a municipality"}
+                        2. Municipality is pre-selected: {selectedMunicipalityInternal} (ID: {selectedMunicipalityId})
                       </Text>
                     </View>
                     <View style={styles.rowContainer}>
-                      <MaterialIcons name="check-circle" size={16} color="#0891B2" style={styles.iconStyle} />
+                      <MaterialIcons
+                        name="check-circle"
+                        size={16}
+                        color="#0891B2"
+                        style={styles.iconStyle}
+                      />
                       <Text className="text-cyan-700 text-sm ml-2 flex-1">
                         3. Click "Pin Barangay Location" button to open map
                       </Text>
                     </View>
                     <View style={styles.rowContainer}>
-                      <MaterialIcons name="check-circle" size={16} color="#0891B2" style={styles.iconStyle} />
+                      <MaterialIcons
+                        name="check-circle"
+                        size={16}
+                        color="#0891B2"
+                        style={styles.iconStyle}
+                      />
                       <Text className="text-cyan-700 text-sm ml-2 flex-1">
                         4. Use GPS or tap on map to place marker, drag to adjust position
                       </Text>
                     </View>
                     <View style={styles.rowContainer}>
-                      <MaterialIcons name="check-circle" size={16} color="#0891B2" style={styles.iconStyle} />
+                      <MaterialIcons
+                        name="check-circle"
+                        size={16}
+                        color="#0891B2"
+                        style={styles.iconStyle}
+                      />
                       <Text className="text-cyan-700 text-sm ml-2 flex-1">
                         5. Review and {isEditing ? "update" : "save"} the barangay location
                       </Text>
@@ -988,7 +1129,7 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
 
           <View className="px-6 mb-4">
             <View className="flex-row">
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={handleCancel}
                 className="flex-1 bg-gray-100 p-4 rounded-xl mr-2 border border-gray-300"
               >
@@ -996,13 +1137,17 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                   Cancel
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={handleSubmit} 
+              <TouchableOpacity
+                onPress={handleSubmit}
                 className={`flex-1 p-4 rounded-xl ml-2 ${submitButtonState.bg}`}
                 disabled={submitButtonState.disabled}
               >
                 <View className="flex-row items-center justify-center">
-                  <MaterialIcons name={isEditing ? "save-as" : "save"} size={20} color="white" />
+                  <MaterialIcons
+                    name={isEditing ? "save-as" : "save"}
+                    size={20}
+                    color="white"
+                  />
                   <Text className="text-white font-semibold text-center text-base ml-2">
                     {submitButtonState.text}
                   </Text>
@@ -1013,17 +1158,16 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
 
           <View className="px-6">
             <Text className="text-gray-400 text-xs text-center">
-              {isEditing 
+              {isEditing
                 ? "This will update the barangay information for emergency response mapping and resource allocation."
-                : "This will register a new barangay location for emergency response mapping and resource allocation."
-              }
+                : "This will register a new barangay location for emergency response mapping and resource allocation."}
             </Text>
           </View>
         </ScrollView>
 
-        <Modal 
-          visible={showMap} 
-          animationType="slide" 
+        <Modal
+          visible={showMap}
+          animationType="slide"
           transparent={false}
           onRequestClose={() => setShowMap(false)}
         >
@@ -1037,7 +1181,7 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                   {barangayName} - {selectedMunicipalityInternal}
                 </Text>
               </View>
-              <TouchableOpacity 
+              <TouchableOpacity
                 className="p-2"
                 onPress={() => setShowMap(false)}
               >
@@ -1061,11 +1205,11 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                 <Switch
                   value={gpsEnabled}
                   onValueChange={toggleGPS}
-                  trackColor={{ false: '#D1D5DB', true: '#10B981' }}
-                  thumbColor={gpsEnabled ? '#FFFFFF' : '#F3F4F6'}
+                  trackColor={{ false: "#D1D5DB", true: "#10B981" }}
+                  thumbColor={gpsEnabled ? "#FFFFFF" : "#F3F4F6"}
                 />
                 <Text className="ml-2 text-gray-700 font-medium">
-                  {gpsEnabled ? 'ON' : 'OFF'}
+                  {gpsEnabled ? "ON" : "OFF"}
                 </Text>
               </View>
             </View>
@@ -1076,7 +1220,7 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                   onPress={getCurrentLocation}
                   disabled={isGettingLocation}
                   className={`rounded-lg p-3 flex-row items-center justify-center ${
-                    isGettingLocation ? 'bg-gray-300' : 'bg-green-600'
+                    isGettingLocation ? "bg-gray-300" : "bg-green-600"
                   }`}
                 >
                   {isGettingLocation ? (
@@ -1088,7 +1232,11 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                     </>
                   ) : (
                     <>
-                      <MaterialIcons name="my-location" size={24} color="white" />
+                      <MaterialIcons
+                        name="my-location"
+                        size={24}
+                        color="white"
+                      />
                       <Text className="text-white font-semibold text-base ml-3">
                         Get My Current Location
                       </Text>
@@ -1101,7 +1249,8 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                       Last GPS Location:
                     </Text>
                     <Text className="text-gray-700 text-xs">
-                      {userLocation.latitude.toFixed(6)}, {userLocation.longitude.toFixed(6)}
+                      {userLocation.latitude.toFixed(6)},{" "}
+                      {userLocation.longitude.toFixed(6)}
                     </Text>
                   </View>
                 )}
@@ -1116,7 +1265,7 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                     How to pin location:
                   </Text>
                   <Text className="text-cyan-700 text-sm">
-                    {gpsEnabled 
+                    {gpsEnabled
                       ? "1. Use GPS button to get your current location\n2. Or tap anywhere within the red rectangle to place a marker\n3. You can drag the marker to adjust the position"
                       : "1. Tap anywhere within the red rectangle (Biliran Province) to place a marker\n2. You can drag the marker to adjust the position\n3. The address will be automatically generated"}
                   </Text>
@@ -1128,7 +1277,7 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
               <View style={{ flex: 1 }}>
                 <WebView
                   ref={webViewRef}
-                  originWhitelist={['*']}
+                  originWhitelist={["*"]}
                   source={{ html: mapHtml }}
                   style={{ flex: 1 }}
                   onMessage={(event) => {
@@ -1143,13 +1292,15 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                   renderLoading={() => (
                     <View className="flex-1 justify-center items-center absolute inset-0 bg-white">
                       <ActivityIndicator size="large" color="#0891B2" />
-                      <Text className="mt-4 text-gray-600 font-medium">Loading Map...</Text>
+                      <Text className="mt-4 text-gray-600 font-medium">
+                        Loading Map...
+                      </Text>
                     </View>
                   )}
                 />
                 <View className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200">
                   <View className="flex-row">
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => setShowMap(false)}
                       className="flex-1 bg-gray-100 p-4 rounded-xl mr-2 border border-gray-300"
                     >
@@ -1157,17 +1308,19 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
                         Cancel
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={handleConfirmLocation}
                       disabled={!marker}
                       className={`flex-1 p-4 rounded-xl ml-2 ${
-                        marker ? 'bg-green-600' : 'bg-gray-300'
+                        marker ? "bg-green-600" : "bg-gray-300"
                       }`}
                     >
                       <View className="flex-row items-center justify-center">
                         <MaterialIcons name="check" size={20} color="white" />
                         <Text className="text-white font-semibold text-center text-base ml-2">
-                          {marker ? 'Confirm Location' : 'Select Location First'}
+                          {marker
+                            ? "Confirm Location"
+                            : "Select Location First"}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -1177,7 +1330,9 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(6)}, ${locationData.coo
             ) : (
               <View className="flex-1 justify-center items-center">
                 <ActivityIndicator size="large" color="#0891B2" />
-                <Text className="mt-4 text-gray-600 font-medium">Preparing Map...</Text>
+                <Text className="mt-4 text-gray-600 font-medium">
+                  Preparing Map...
+                </Text>
               </View>
             )}
           </SafeAreaView>
@@ -1192,8 +1347,8 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   rowContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 8,
   },
   iconStyle: {

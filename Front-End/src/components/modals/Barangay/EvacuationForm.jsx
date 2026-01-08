@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  FlatList,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -21,7 +22,9 @@ const EvacuationForm = ({
   selectedBarangay,
   selectedMunicipality,
   editingEvacuation,
+  municipalities,
   initialData = null,
+  onMunicipalityChange,
 }) => {
   const [formData, setFormData] = useState({
     evacuationName: "",
@@ -42,6 +45,8 @@ const EvacuationForm = ({
 
   const [formErrors, setFormErrors] = useState({});
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [showMunicipalityDropdown, setShowMunicipalityDropdown] = useState(false);
+  const [selectedMunicipalityState, setSelectedMunicipalityState] = useState(selectedMunicipality || null);
 
   // Effect to populate form when editingEvacuation changes
   useEffect(() => {
@@ -54,20 +59,22 @@ const EvacuationForm = ({
           latitude: editingEvacuation.location?.latitude?.toString() || "",
           longitude: editingEvacuation.location?.longitude?.toString() || "",
         },
-        evacuationCapacity: editingEvacuation.evacuationCapacity?.toString() || "",
+        evacuationCapacity:
+          editingEvacuation.evacuationCapacity?.toString() || "",
         totalHouseholds: editingEvacuation.totalHouseholds?.toString() || "",
         contactPerson: {
           name: editingEvacuation.contactPerson?.name || "",
           contactNumber: editingEvacuation.contactPerson?.contactNumber || "",
           email: editingEvacuation.contactPerson?.email || "",
         },
-        isActive: editingEvacuation.isActive !== undefined ? editingEvacuation.isActive : true,
+        isActive:
+          editingEvacuation.isActive !== undefined
+            ? editingEvacuation.isActive
+            : true,
       });
     } else if (initialData) {
-      // Fallback to initialData if editingEvacuation is not provided
       setFormData(initialData);
     } else {
-      // Reset to empty form for adding new evacuation
       setFormData({
         evacuationName: "",
         location: {
@@ -88,15 +95,18 @@ const EvacuationForm = ({
     setFormErrors({});
   }, [editingEvacuation, initialData, visible]);
 
+  // Effect to update selectedMunicipalityState when prop changes
+  useEffect(() => {
+    setSelectedMunicipalityState(selectedMunicipality);
+  }, [selectedMunicipality]);
+
   // Input filtering functions
   const filterNumericInput = (text) => {
     return text.replace(/[^0-9]/g, "");
   };
 
   const filterDecimalInput = (text) => {
-    // Allow numbers and one decimal point
     const cleaned = text.replace(/[^0-9.]/g, "");
-    // Ensure only one decimal point
     const parts = cleaned.split(".");
     if (parts.length > 2) {
       return parts[0] + "." + parts.slice(1).join("");
@@ -105,29 +115,24 @@ const EvacuationForm = ({
   };
 
   const filterNameInput = (text) => {
-    // Allow letters, spaces, hyphens, apostrophes, and Filipino characters
     return text.replace(/[^a-zA-Z\s\-'ñÑáéíóúÁÉÍÓÚüÜ]/g, "");
   };
 
   const filterEvacuationName = (text) => {
-    // Allow letters, numbers, spaces, and common punctuation
     return text.replace(/[^a-zA-Z0-9\s\-.,()&ñÑáéíóúÁÉÍÓÚüÜ]/g, "");
   };
 
   const filterPhoneNumber = (text) => {
-    // Allow numbers, plus sign, parentheses, hyphens, and spaces
     return text.replace(/[^0-9+()\-\s]/g, "");
   };
 
   const filterEmail = (text) => {
-    // Basic email characters filter
     return text.replace(/[^a-zA-Z0-9@._+\-]/g, "");
   };
 
   const handleFormChange = (field, value) => {
     let filteredValue = value;
 
-    // Apply filters based on field type
     switch (field) {
       case "evacuationName":
         filteredValue = filterEvacuationName(value);
@@ -150,7 +155,6 @@ const EvacuationForm = ({
         filteredValue = filterDecimalInput(value);
         break;
       case "location.address":
-        // Address can have any characters
         filteredValue = value;
         break;
       default:
@@ -173,7 +177,6 @@ const EvacuationForm = ({
       }));
     }
 
-    // Clear error for this field if it exists
     if (formErrors[field]) {
       setFormErrors((prev) => ({
         ...prev,
@@ -271,6 +274,15 @@ const EvacuationForm = ({
     }
   };
 
+  const handleSelectMunicipality = (municipality) => {
+    setSelectedMunicipalityState(municipality);
+    setShowMunicipalityDropdown(false);
+    
+    if (onMunicipalityChange) {
+      onMunicipalityChange(municipality);
+    }
+  };
+
   const validateForm = () => {
     const errors = {};
 
@@ -278,6 +290,12 @@ const EvacuationForm = ({
       errors.evacuationName = "Evacuation center name is required";
     } else if (formData.evacuationName.trim().length < 3) {
       errors.evacuationName = "Name must be at least 3 characters";
+    }
+
+    if (!selectedMunicipalityState) {
+      errors.municipality = "Municipality is required";
+    } else if (!selectedMunicipalityState._id) {
+      errors.municipality = "Municipality ID is missing";
     }
 
     if (!formData.location.address.trim()) {
@@ -368,6 +386,14 @@ const EvacuationForm = ({
       return;
     }
 
+    if (!selectedMunicipalityState) {
+      Alert.alert(
+        "Error",
+        "Please select a municipality before saving."
+      );
+      return;
+    }
+
     if (!validateForm()) {
       Alert.alert(
         "Validation Error",
@@ -375,6 +401,9 @@ const EvacuationForm = ({
       );
       return;
     }
+
+    // Get municipality ID ONLY (no name)
+    const municipalityId = selectedMunicipalityState._id;
 
     const processedData = {
       ...formData,
@@ -400,8 +429,8 @@ const EvacuationForm = ({
           selectedBarangay?.barangayName ||
           selectedBarangay?.fullAddress?.split(",")[0] ||
           "Unknown Barangay",
-        municipality: selectedMunicipality?.name || "Unknown Municipality",
       },
+      municipality: municipalityId, // Save ONLY the municipality ID
       savedAt: new Date().toISOString(),
     };
 
@@ -410,13 +439,22 @@ const EvacuationForm = ({
       processedData._id = editingEvacuation._id;
     }
 
+    // Console log the data being sent
+    console.log("=== EVACUATION FORM DATA TO BE SUBMITTED ===");
+    console.log("Form Data:", processedData);
+    console.log("Municipality ID:", municipalityId);
+    console.log("Selected Municipality:", selectedMunicipalityState);
+    console.log("Selected Barangay:", selectedBarangay);
+    console.log("Editing Mode:", editingEvacuation ? "Yes" : "No");
+    console.log("===========================================");
+
     Alert.alert(
       "Success",
       `Evacuation center "${processedData.evacuationName}" has been ${
         editingEvacuation ? "updated" : "saved"
       } successfully!\n\nBarangay: ${
         processedData.barangayReference.name
-      }\nMunicipality: ${processedData.barangayReference.municipality}`,
+      }\nMunicipality ID: ${municipalityId}`,
       [
         {
           text: "OK",
@@ -448,6 +486,8 @@ const EvacuationForm = ({
     });
     setFormErrors({});
     setIsGettingLocation(false);
+    setShowMunicipalityDropdown(false);
+    setSelectedMunicipalityState(null);
   };
 
   return (
@@ -473,19 +513,12 @@ const EvacuationForm = ({
                     <Text className="text-2xl font-bold text-gray-800">
                       {editingEvacuation ? "Edit" : "Add"} Evacuation Center
                     </Text>
-                    <Text className="text-gray-500 text-sm mt-1">
+                    
+                    <Text className="text-gray-500 text-sm mt-2">
                       {selectedBarangay?.barangayName ||
                         selectedBarangay?.fullAddress?.split(",")[0]}
-                      , {selectedMunicipality?.name}
+                      , {selectedMunicipalityState?.municipalityName || selectedMunicipalityState?.name || "Unknown Municipality"}
                     </Text>
-                    <View className="mt-1">
-                      <Text className="text-xs text-cyan-600">
-                        Barangay ID: {selectedBarangay?._id || "N/A"}
-                        {editingEvacuation && editingEvacuation._id && (
-                          <Text> | Evacuation ID: {editingEvacuation._id}</Text>
-                        )}
-                      </Text>
-                    </View>
                   </View>
                   <TouchableOpacity
                     onPress={() => {
@@ -508,7 +541,8 @@ const EvacuationForm = ({
                   </View>
                   <Text className="text-cyan-700 font-medium">
                     Fill in the details below to{" "}
-                    {editingEvacuation ? "update" : "add a new"} evacuation center
+                    {editingEvacuation ? "update" : "add a new"} evacuation
+                    center
                   </Text>
                 </View>
               </View>
@@ -536,6 +570,42 @@ const EvacuationForm = ({
                     </View>
                     <Text className="text-lg font-semibold text-gray-800">
                       Basic Information
+                    </Text>
+                  </View>
+
+                  <View className="mb-4">
+                    <Text className="text-gray-700 font-medium mb-2">
+                      Municipality <Text className="text-red-500">*</Text>
+                    </Text>
+                    <TouchableOpacity 
+                      onPress={() => setShowMunicipalityDropdown(true)}
+                      className="mb-2"
+                    >
+                      <View className={`flex-row items-center justify-between bg-white p-4 rounded-xl border ${
+                        formErrors.municipality
+                          ? "border-red-300"
+                          : "border-gray-200"
+                      }`}>
+                        <View className="flex-row items-center">
+                          <MaterialIcons name="location-city" size={20} color="#0891B2" />
+                          <Text className="ml-2 text-gray-800">
+                            {selectedMunicipalityState?.municipalityName || selectedMunicipalityState?.name || "Select Municipality"}
+                          </Text>
+                        </View>
+                        <MaterialIcons 
+                          name="arrow-drop-down" 
+                          size={20} 
+                          color="#6B7280" 
+                        />
+                      </View>
+                    </TouchableOpacity>
+                    {formErrors.municipality && (
+                      <Text className="text-red-500 text-sm mt-1 ml-2">
+                        {formErrors.municipality}
+                      </Text>
+                    )}
+                    <Text className="text-gray-500 text-xs mt-2 ml-2">
+                      Select the municipality where the evacuation center is located
                     </Text>
                   </View>
 
@@ -930,10 +1000,12 @@ const EvacuationForm = ({
 
                   <TouchableOpacity
                     className={`flex-1 px-4 py-3.5 ${
-                      selectedBarangay?._id ? "bg-cyan-600" : "bg-gray-400"
+                      selectedBarangay?._id && selectedMunicipalityState
+                        ? "bg-cyan-600"
+                        : "bg-gray-400"
                     } rounded-xl flex-row items-center justify-center`}
                     onPress={handleSubmit}
-                    disabled={!selectedBarangay?._id}
+                    disabled={!selectedBarangay?._id || !selectedMunicipalityState}
                   >
                     <MaterialIcons name="save" size={20} color="white" />
                     <Text className="text-white font-medium ml-2">
@@ -950,13 +1022,14 @@ const EvacuationForm = ({
                       Fields marked with <Text className="text-red-500">
                         *
                       </Text>{" "}
-                      are required. The evacuation center will be linked to
-                      Barangay:{" "}
+                      are required. The evacuation center will be linked to Barangay:{" "}
                       {selectedBarangay?.barangayName ||
                         selectedBarangay?.fullAddress?.split(",")[0] ||
                         "Unknown Barangay"}
                       {!selectedBarangay?._id &&
                         " (Barangay ID missing - cannot save)"}
+                      {!selectedMunicipalityState &&
+                        " (Municipality not selected)"}
                     </Text>
                   </View>
                 </View>
@@ -965,6 +1038,81 @@ const EvacuationForm = ({
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Municipality Dropdown Modal */}
+      <Modal
+        visible={showMunicipalityDropdown}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMunicipalityDropdown(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-black/50 justify-end"
+          activeOpacity={1}
+          onPress={() => setShowMunicipalityDropdown(false)}
+        >
+          <View className="bg-white rounded-t-3xl max-h-3/4">
+            <View className="p-4 border-b border-gray-200">
+              <Text className="text-lg font-semibold text-gray-800">Select Municipality</Text>
+              <Text className="text-gray-500 text-sm mt-1">
+                Choose a municipality for the evacuation center
+              </Text>
+            </View>
+            
+            <FlatList
+              data={municipalities || []}
+              keyExtractor={(item) => item._id}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  className={`px-5 py-4 border-b border-gray-100 ${
+                    selectedMunicipalityState?._id === item._id ? 'bg-cyan-50' : ''
+                  }`}
+                  onPress={() => handleSelectMunicipality(item)}
+                >
+                  <View className="flex-row items-center">
+                    <MaterialIcons 
+                      name="location-city" 
+                      size={20} 
+                      color={selectedMunicipalityState?._id === item._id ? "#0891B2" : "#6B7280"} 
+                    />
+                    <Text 
+                      className={`ml-3 font-medium ${
+                        selectedMunicipalityState?._id === item._id 
+                          ? 'text-cyan-700' 
+                          : 'text-gray-800'
+                      }`}
+                    >
+                      {item.municipalityName}
+                    </Text>
+                    {selectedMunicipalityState?._id === item._id && (
+                      <MaterialIcons 
+                        name="check" 
+                        size={20} 
+                        color="#0891B2" 
+                        style={{ marginLeft: 'auto' }}
+                      />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <View className="p-6 items-center">
+                  <MaterialIcons name="location-off" size={40} color="#9CA3AF" />
+                  <Text className="text-gray-500 mt-2">No municipalities available</Text>
+                </View>
+              }
+            />
+            
+            <TouchableOpacity
+              className="border-t border-gray-200 p-4 items-center"
+              onPress={() => setShowMunicipalityDropdown(false)}
+            >
+              <Text className="text-gray-600 font-medium">Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </Modal>
   );
 };

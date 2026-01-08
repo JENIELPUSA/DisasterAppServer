@@ -1,9 +1,71 @@
 const AsyncErrorHandler = require("../Utils/AsyncErrorHandler");
-const Admin = require("../Models/AdminSchema");
+const mongoose = require("mongoose");
 const Apifeatures = require("../Utils/ApiFeatures");
 const UserLoginSchema = require("../Models/LogInSchema");
 const cloudinary = require("../Utils/cloudinary");
 const LogInSchema = require("../Models/LogInSchema");
+const HouseholdLead = require("../Models/HouseholdLead");
+const HouseholdMember = require("../Models/HouseholdMember");
+const Rescue = require("../Models/Rescuer");
+const BarangayCaptain = require("../Models/BarangayCaptain");
+const Admin = require("../Models/AdminSchema");
+
+exports.DisplayProfile = AsyncErrorHandler(async (req, res) => {
+  const userLoginId = req.user.linkId; // UserLogin _id (galing JWT)
+  const result = await UserLoginSchema.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(userLoginId),
+      },
+    },
+    {
+      $lookup: {
+        from: "householdmembers", // collection name
+        localField: "_id",
+        foreignField: "userId",
+        as: "householdMember",
+      },
+    },
+    {
+      $unwind: {
+        path: "$householdMember",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: "householdleads",
+        localField: "householdMember.householdLeadId",
+        foreignField: "_id",
+        as: "householdLead",
+      },
+    },
+    {
+      $unwind: {
+        path: "$householdLead",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $project: {
+        password: 0, // hide password
+        "householdLead.verificationCode": 0, // hide verificationCode
+      },
+    },
+  ]);
+
+  if (!result.length) {
+    return res.status(404).json({
+      status: "fail",
+      message: "Profile not found",
+    });
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: result[0],
+  });
+});
 
 exports.updateAdmin = async (req, res) => {
   const adminId = req.params.id;
@@ -213,19 +275,4 @@ exports.DisplayAdmin = AsyncErrorHandler(async (req, res) => {
       error: error.message,
     });
   }
-});
-exports.DisplayProfile = AsyncErrorHandler(async (req, res) => {
-  const loggedInAdminId = req.user.linkId;
-  const admin = await Admin.findById(loggedInAdminId);
-  if (!admin) {
-    return res.status(404).json({
-      status: "fail",
-      message: "Admin not found",
-    });
-  }
-
-  res.status(200).json({
-    status: "success",
-    data: admin,
-  });
 });

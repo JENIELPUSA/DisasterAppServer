@@ -18,12 +18,12 @@ const MunicipalitiesView = ({
   renderMunicipalityCard,
   handleCancel,
   setSelectedMunicipality,
+  displayBarangaysForUser,
 }) => {
-  
   // Skeleton Loading Component
   const SkeletonLoading = () => {
     const skeletonItems = Array.from({ length: 8 }, (_, i) => i);
-    
+
     return (
       <>
         {/* Header Skeleton */}
@@ -107,6 +107,11 @@ const MunicipalitiesView = ({
     );
   };
 
+const handleMunicipalityPress = async (item) => {
+  await displayBarangaysForUser("", 1, item.id);
+  setSelectedMunicipality(item);
+};
+
   return (
     <>
       {loading ? (
@@ -138,7 +143,7 @@ const MunicipalitiesView = ({
                 name="search"
                 size={20}
                 color="#9CA3AF"
-                style={{ position: 'absolute', left: 16, top: 16, zIndex: 10 }}
+                style={{ position: "absolute", left: 16, top: 16, zIndex: 10 }}
               />
               <TextInput
                 className="bg-white p-4 pl-12 rounded-xl border border-gray-200 text-base"
@@ -178,19 +183,25 @@ const MunicipalitiesView = ({
                   <Text className="text-2xl font-bold text-cyan-700">
                     {municipalities.length}
                   </Text>
-                  <Text className="text-cyan-600 text-sm font-medium">Municipalities</Text>
+                  <Text className="text-cyan-600 text-sm font-medium">
+                    Municipalities
+                  </Text>
                 </View>
 
                 <View className="items-center">
                   <Text className="text-2xl font-bold text-cyan-700">
                     {barangays.length}
                   </Text>
-                  <Text className="text-cyan-600 text-sm font-medium">Barangays</Text>
+                  <Text className="text-cyan-600 text-sm font-medium">
+                    Barangays
+                  </Text>
                 </View>
 
                 <View className="items-center">
                   <Text className="text-2xl font-bold text-cyan-700">1</Text>
-                  <Text className="text-cyan-600 text-sm font-medium">Province</Text>
+                  <Text className="text-cyan-600 text-sm font-medium">
+                    Province
+                  </Text>
                 </View>
               </View>
             </View>
@@ -218,7 +229,7 @@ const MunicipalitiesView = ({
               filteredMunicipalities.map((item) => (
                 <TouchableOpacity
                   key={item.id}
-                  onPress={() => setSelectedMunicipality(item)}
+                  onPress={() => handleMunicipalityPress(item)}
                   activeOpacity={0.7}
                   className="p-5 bg-white rounded-xl mb-4 border border-gray-100 shadow-sm"
                 >
@@ -226,7 +237,11 @@ const MunicipalitiesView = ({
                     <View className="flex-1">
                       <View className="flex-row items-center mb-2">
                         <View className="w-10 h-10 rounded-full bg-cyan-100 items-center justify-center mr-3">
-                          <MaterialIcons name="location-city" size={22} color="#0891B2" />
+                          <MaterialIcons
+                            name="location-city"
+                            size={22}
+                            color="#0891B2"
+                          />
                         </View>
                         <Text className="text-lg font-semibold text-gray-800">
                           {item.name}
@@ -236,7 +251,9 @@ const MunicipalitiesView = ({
                       {item.name === "Naval (Capital)" && (
                         <View className="ml-12">
                           <View className="bg-yellow-100 px-2 py-1 rounded-full self-start mb-1">
-                            <Text className="text-yellow-800 text-xs font-medium">Provincial Capital</Text>
+                            <Text className="text-yellow-800 text-xs font-medium">
+                              Provincial Capital
+                            </Text>
                           </View>
                         </View>
                       )}
@@ -244,7 +261,11 @@ const MunicipalitiesView = ({
 
                     <View className="bg-cyan-50 px-4 py-2 rounded-lg border border-cyan-200">
                       <View className="flex-row items-center">
-                        <MaterialIcons name="apartment" size={16} color="#0891B2" />
+                        <MaterialIcons
+                          name="apartment"
+                          size={16}
+                          color="#0891B2"
+                        />
                         <Text className="text-cyan-700 font-bold text-base ml-2">
                           {item.totalBarangays}
                         </Text>

@@ -17,6 +17,23 @@ router
   .get(HouseholdLeadController.DropdownAllHouseHold);
 router
   .route("/barangay/:barangayId")
-  .get(authController.protect,HouseholdLeadController.getHouseholdLeadsByBarangayId);
+  .get(
+    authController.protect,
+    HouseholdLeadController.getHouseholdLeadsByBarangayId
+  );
+
+router
+  .route("/getHouseholdLeadsSendNotification")
+  .get(
+    authController.protect,
+    HouseholdLeadController.getHouseholdLeadsSendNotification
+  );
+
+router
+  .route("/getHouseholdLeadsByBarangayId/:barangayId")
+  .get(
+    authController.protect,
+    HouseholdLeadController.getHouseholdLeadsByBarangayId
+  );
 
 module.exports = router;

@@ -36,6 +36,7 @@ export default {
     extra: {
       apiUrl: process.env.EXPO_PUBLIC_API_URL,
       frontendUrl: process.env.FRONTEND_URL,
+      maptilerKey: process.env.EXPO_PUBLIC_MAPTILER_KEY,
       eas: {
         projectId: "2a56cdc4-7c35-47f7-bbf0-71bcaf21aba9",
       },

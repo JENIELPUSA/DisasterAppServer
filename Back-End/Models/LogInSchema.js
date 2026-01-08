@@ -7,54 +7,64 @@ const UserLoginSchema = new mongoose.Schema({
   // Personal Information
   fullName: {
     type: String,
-    required: [true, 'Full name is required'],
-    trim: true
+    required: [true, "Full name is required"],
+    trim: true,
   },
   username: {
     type: String,
-    required: [true, 'Email is required'],
+    required: [true, "Email is required"],
     unique: true,
     lowercase: true,
-    trim: true
+    trim: true,
+  },
+  MunicipalityId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Municipality",
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
-    minlength: 6
+    required: [true, "Password is required"],
+    minlength: 6,
   },
   contactNumber: {
     type: String,
   },
   address: {
-    type: String
+    type: String,
   },
-  
+
   // Role Information
   role: {
     type: String,
-    enum: ['rescuer', 'household_lead', 'brgy_captain', 'household_member','admin'],
-    required: [true, 'Role is required']
+    enum: [
+      "rescuer",
+      "household_lead",
+      "brgy_captain",
+      "household_member",
+      "admin",
+    ],
+    required: [true, "Role is required"],
   },
-  
+
   // Status
   isActive: {
     type: Boolean,
-    default: true
+    default: true,
   },
   isVerified: {
     type: Boolean,
-    default: false
+    default: false,
   },
-  
+
   // Timestamps
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   updatedAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
 // Mongoose pre-save middleware to hash the password and remove confirmPassword

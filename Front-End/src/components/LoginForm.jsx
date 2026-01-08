@@ -26,10 +26,10 @@ export default function LoginForm({
   handleLogin,
   isLoading,
   signup,
-  navigation,
   DropdowndataLead = [],
   fetchHouseholdLeadsForDropdown,
   BarangaysDropdownData = [],
+  municipalities = [],
 }) {
   const [showLogin, setShowLogin] = useState(true); // true = login, false = registration
 
@@ -38,22 +38,27 @@ export default function LoginForm({
   const [selectedRole, setSelectedRole] = useState(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [showBarangayDropdown, setShowBarangayDropdown] = useState(false);
-  const [showHouseholdLeadDropdown, setShowHouseholdLeadDropdown] = useState(false);
-  const [showRelationshipDropdown, setShowRelationshipDropdown] = useState(false);
+  const [showHouseholdLeadDropdown, setShowHouseholdLeadDropdown] =
+    useState(false);
+  const [showRelationshipDropdown, setShowRelationshipDropdown] =
+    useState(false);
   const [isSignupLoading, setIsSignupLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [birthDate, setBirthDate] = useState(new Date());
   const [filteredHouseholdLeads, setFilteredHouseholdLeads] = useState([]);
   const [filteredBarangays, setFilteredBarangays] = useState([]);
   const [barangaySearchText, setBarangaySearchText] = useState("");
-  const [isRegisteringNewBarangay, setIsRegisteringNewBarangay] = useState(false);
+  const [isRegisteringNewBarangay, setIsRegisteringNewBarangay] =
+    useState(false);
   const [newBarangayName, setNewBarangayName] = useState("");
-  const [showRegisterBarangayModal, setShowRegisterBarangayModal] = useState(false);
+  const [showRegisterBarangayModal, setShowRegisterBarangayModal] =
+    useState(false);
   const [isLoadingHouseholdLeads, setIsLoadingHouseholdLeads] = useState(false);
 
   const [registrationData, setRegistrationData] = useState({
     fullName: "",
     contactNumber: "",
+    municipalityId: "",
     address: "",
     email: "",
     password: "",
@@ -197,7 +202,11 @@ export default function LoginForm({
         }
         setFilteredHouseholdLeads(leads || []);
 
-        if (shouldShowNoLeadsAlertRef.current && (leads || []).length === 0 && barangayId) {
+        if (
+          shouldShowNoLeadsAlertRef.current &&
+          (leads || []).length === 0 &&
+          barangayId
+        ) {
           const selectedBarangay = getFilteredBarangays().find(
             (b) => b._id === barangayId
           );
@@ -209,7 +218,7 @@ export default function LoginForm({
         } else {
           setFilteredHouseholdLeads([]);
         }
-        
+
         if (shouldShowNoLeadsAlertRef.current) {
           Alert.alert("Error", "Failed to fetch household leads");
         }
@@ -342,10 +351,12 @@ export default function LoginForm({
   const validateStep = () => {
     switch (currentStep) {
       case 1:
-        if (!registrationData.fullName || !registrationData.contactNumber) {
+        if (!registrationData.fullName || 
+            !registrationData.contactNumber || 
+            !registrationData.municipality) {
           Alert.alert(
             "Validation Error",
-            "Please fill in required personal information fields"
+            "Please fill in required personal information fields including municipality"
           );
           return false;
         }
@@ -429,155 +440,159 @@ export default function LoginForm({
     }
   };
 
-const handleSubmitRegistration = async () => {
-  if (!validateStep()) {
-    return;
-  }
-
-  setIsSignupLoading(true);
-
-  try {
-    const formData = {
-      fullName: registrationData.fullName,
-      email: registrationData.email,
-      password: registrationData.password,
-      contactNumber: registrationData.contactNumber,
-      address: registrationData.address || "",
-      role: registrationData.role,
-      ...(registrationData.organization && {
-        organization: registrationData.organization,
-      }),
-      ...(registrationData.idNumber && {
-        idNumber: registrationData.idNumber,
-      }),
-      ...(registrationData.role !== "brgy_captain" &&
-        registrationData.barangay && {
-          barangay: registrationData.barangayId,
-        }),
-      ...(registrationData.familyMembers && {
-        familyMembers: registrationData.familyMembers,
-      }),
-      ...(registrationData.householdLeadId && {
-        householdLeadId: registrationData.householdLeadId,
-      }),
-      ...(registrationData.relationship && {
-        relationship: registrationData.relationship,
-      }),
-      ...(registrationData.householdLead && {
-        householdLeadName: registrationData.householdLead,
-      }),
-      ...(registrationData.householdAddress && {
-        householdAddress: registrationData.householdAddress,
-      }),
-      ...(registrationData.role === "household_member" && {
-        disability: registrationData.disability || "",
-        birthDate: registrationData.birthDate,
-        age: calculateAge(new Date(registrationData.birthDate)),
-      }),
-      ...(selectedRole?.value === "brgy_captain" && {
-        ...(registrationData.barangayId && {
-          barangayName: registrationData.barangayId,
-        }),
-        ...(isRegisteringNewBarangay && {
-          isNewBarangay: true,
-          newBarangayName: newBarangayName,
-        }),
-      }),
-      // Include GPS coordinates for household_lead
-      ...(selectedRole?.value === "household_lead" && {
-        ...(registrationData.latitude && {
-          latitude: registrationData.latitude,
-        }),
-        ...(registrationData.longitude && {
-          longitude: registrationData.longitude,
-        }),
-        ...(registrationData.gpsCoordinates && {
-          gpsCoordinates: registrationData.gpsCoordinates,
-        }),
-        ...(registrationData.emergencyContact && {
-          emergencyContact: registrationData.emergencyContact,
-        }),
-      }),
-    };
-
-    // For household_lead, ensure GPS coordinates are provided
-    if (selectedRole?.value === "household_lead") {
-      if (!registrationData.latitude || !registrationData.longitude) {
-        Alert.alert(
-          "GPS Required",
-          "Please get your GPS location to register as a household lead. This is required for emergency response.",
-          [{ text: "OK" }]
-        );
-        setIsSignupLoading(false);
-        return;
-      }
+  const handleSubmitRegistration = async () => {
+    if (!validateStep()) {
+      return;
     }
 
-    const result = await signup(formData);
+    setIsSignupLoading(true);
 
-    if (result.success) {
-      if (
-        selectedRole?.value === "brgy_captain" &&
-        isRegisteringNewBarangay
-      ) {
-        Alert.alert(
-          "Registration Successful!",
-          `Your account has been created and "${newBarangayName}" will be added to the system after verification.\n\nPlease check your email for further instructions.`,
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                handleBackToLogin();
+    console.log("registrationData", registrationData);
+
+    try {
+      const formData = {
+        fullName: registrationData.fullName,
+        email: registrationData.email,
+        password: registrationData.password,
+        contactNumber: registrationData.contactNumber,
+        MunicipalityId: registrationData.municipalityId,
+        address: registrationData.address || "",
+        role: registrationData.role,
+        ...(registrationData.organization && {
+          organization: registrationData.organization,
+        }),
+        ...(registrationData.idNumber && {
+          idNumber: registrationData.idNumber,
+        }),
+        ...(registrationData.role !== "brgy_captain" &&
+          registrationData.barangay && {
+            barangay: registrationData.barangayId,
+          }),
+        ...(registrationData.familyMembers && {
+          familyMembers: registrationData.familyMembers,
+        }),
+        ...(registrationData.householdLeadId && {
+          householdLeadId: registrationData.householdLeadId,
+        }),
+        ...(registrationData.relationship && {
+          relationship: registrationData.relationship,
+        }),
+        ...(registrationData.householdLead && {
+          householdLeadName: registrationData.householdLead,
+        }),
+        ...(registrationData.householdAddress && {
+          householdAddress: registrationData.householdAddress,
+        }),
+        ...(registrationData.role === "household_member" && {
+          disability: registrationData.disability || "",
+          birthDate: registrationData.birthDate,
+          age: calculateAge(new Date(registrationData.birthDate)),
+        }),
+        ...(selectedRole?.value === "brgy_captain" && {
+          ...(registrationData.barangayId && {
+            barangayName: registrationData.barangayId,
+          }),
+          ...(isRegisteringNewBarangay && {
+            isNewBarangay: true,
+            newBarangayName: newBarangayName,
+          }),
+        }),
+        // Include GPS coordinates for household_lead
+        ...(selectedRole?.value === "household_lead" && {
+          ...(registrationData.latitude && {
+            latitude: registrationData.latitude,
+          }),
+          ...(registrationData.longitude && {
+            longitude: registrationData.longitude,
+          }),
+          ...(registrationData.gpsCoordinates && {
+            gpsCoordinates: registrationData.gpsCoordinates,
+          }),
+          ...(registrationData.emergencyContact && {
+            emergencyContact: registrationData.emergencyContact,
+          }),
+        }),
+      };
+
+      // For household_lead, ensure GPS coordinates are provided
+      if (selectedRole?.value === "household_lead") {
+        if (!registrationData.latitude || !registrationData.longitude) {
+          Alert.alert(
+            "GPS Required",
+            "Please get your GPS location to register as a household lead. This is required for emergency response.",
+            [{ text: "OK" }]
+          );
+          setIsSignupLoading(false);
+          return;
+        }
+      }
+
+      const result = await signup(formData);
+
+      if (result.success) {
+        if (
+          selectedRole?.value === "brgy_captain" &&
+          isRegisteringNewBarangay
+        ) {
+          Alert.alert(
+            "Registration Successful!",
+            `Your account has been created and "${newBarangayName}" will be added to the system after verification.\n\nPlease check your email for further instructions.`,
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  handleBackToLogin();
+                },
               },
-            },
-          ]
-        );
-      } else if (result.verificationRequired) {
-        Alert.alert(
-          "Registration Successful",
-          result.message ||
-            "Please wait for verification from your household lead.",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                handleBackToLogin();
+            ]
+          );
+        } else if (result.verificationRequired) {
+          Alert.alert(
+            "Registration Successful",
+            result.message ||
+              "Please wait for verification from your household lead.",
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  handleBackToLogin();
+                },
               },
-            },
-          ]
-        );
+            ]
+          );
+        } else {
+          Alert.alert(
+            "Registration Successful",
+            result.message || "Your account has been created successfully!",
+            [
+              {
+                text: "OK",
+                onPress: () => {
+                  handleBackToLogin();
+                },
+              },
+            ]
+          );
+        }
       } else {
         Alert.alert(
-          "Registration Successful",
-          result.message || "Your account has been created successfully!",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                handleBackToLogin();
-              },
-            },
-          ]
+          "Registration Failed",
+          result.message || "Something went wrong. Please try again."
         );
       }
-    } else {
-      Alert.alert(
-        "Registration Failed",
-        result.message || "Something went wrong. Please try again."
-      );
+    } catch (error) {
+      console.error("Registration error:", error);
+      Alert.alert("Error", "An unexpected error occurred. Please try again.");
+    } finally {
+      setIsSignupLoading(false);
     }
-  } catch (error) {
-    console.error("Registration error:", error);
-    Alert.alert("Error", "An unexpected error occurred. Please try again.");
-  } finally {
-    setIsSignupLoading(false);
-  }
-};
+  };
 
   const resetRegistrationForm = () => {
     setRegistrationData({
       fullName: "",
       contactNumber: "",
+      municipalityId: "", // ADDED: Municipality field
       address: "",
       email: "",
       password: "",
@@ -678,7 +693,10 @@ const handleSubmitRegistration = async () => {
                       handleInputChange("barangay", item.barangayName);
                       handleInputChange("barangayId", item._id);
                       setShowBarangayDropdown(false);
-                      if (selectedRole?.value === "household_member" && item._id) {
+                      if (
+                        selectedRole?.value === "household_member" &&
+                        item._id
+                      ) {
                         fetchHouseholdLeads(item._id, true);
                       }
                     }}
@@ -809,8 +827,14 @@ const handleSubmitRegistration = async () => {
                           className="px-4 py-3 border-b border-gray-100 active:bg-gray-50"
                           onPress={() => {
                             handleInputChange("householdLead", item.name);
-                            handleInputChange("householdLeadId", item._id || item.id);
-                            handleInputChange("householdAddress", item.address || "");
+                            handleInputChange(
+                              "householdLeadId",
+                              item._id || item.id
+                            );
+                            handleInputChange(
+                              "householdAddress",
+                              item.address || ""
+                            );
                             setShowHouseholdLeadDropdown(false);
                           }}
                         >
@@ -830,27 +854,6 @@ const handleSubmitRegistration = async () => {
                   )}
                 </>
               )}
-
-              <TouchableOpacity
-                className="p-4 items-center border-t border-gray-200"
-                onPress={() => {
-                  handleInputChange("householdLead", "");
-                  handleInputChange("householdLeadId", "");
-                  handleInputChange("householdAddress", "");
-                  setShowHouseholdLeadDropdown(false);
-                }}
-              >
-                <Text className="text-gray-600 font-semibold">
-                  Skip - No Household Lead
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="p-4 items-center border-t border-gray-200"
-                onPress={() => setShowHouseholdLeadDropdown(false)}
-              >
-                <Text className="text-blue-400 font-semibold">Cancel</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </TouchableOpacity>
@@ -1080,6 +1083,7 @@ const handleSubmitRegistration = async () => {
           newBarangayName={newBarangayName}
           setIsRegisteringNewBarangay={setIsRegisteringNewBarangay}
           setNewBarangayName={setNewBarangayName}
+          municipalities={municipalities}
         />
       )}
 

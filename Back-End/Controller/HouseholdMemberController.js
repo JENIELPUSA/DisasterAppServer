@@ -316,9 +316,7 @@ exports.updateHouseholdMember = AsyncErrorHandler(async (req, res) => {
   }
 
   const userId =
-    typeof req.body.userId === "object"
-      ? req.body.userId._id
-      : req.body.userId;
+    typeof req.body.userId === "object" ? req.body.userId._id : req.body.userId;
 
   if (userId && req.body.userId && typeof req.body.userId === "object") {
     const userAllowedFields = ["fullName", "contactNumber", "address"];
@@ -329,7 +327,6 @@ exports.updateHouseholdMember = AsyncErrorHandler(async (req, res) => {
         userUpdateData[field] = req.body.userId[field];
       }
     });
-
 
     if (Object.keys(userUpdateData).length > 0) {
       userUpdateData.updatedAt = Date.now();
@@ -364,3 +361,79 @@ exports.updateHouseholdMember = AsyncErrorHandler(async (req, res) => {
   });
 });
 
+exports.requestRescueByMember = async (req, res) => {
+  const userId = req.user.linkId; // UserLogin._id
+  let { rescueStatus } = req.body;
+  console.log("rescueStatus",rescueStatus)
+  // Validation
+  if (!rescueStatus) {
+    return res.status(400).json({ message: "rescueStatus is required" });
+  }
+
+  rescueStatus = rescueStatus.toLowerCase();
+  const validStatuses = ["pending", "in_progress", "rescued", "cancelled"];
+  if (!validStatuses.includes(rescueStatus)) {
+    return res.status(400).json({
+      message: `Invalid rescue status. Must be one of: ${validStatuses.join(
+        ", "
+      )}`,
+    });
+  }
+
+  try {
+    let lead = null;
+    let foundVia = null;
+
+    // Member-first lookup
+    const member = await HouseholdMember.findOne({ userId });
+
+    if (member) {
+      lead = await HouseholdLead.findById(member.householdLeadId);
+      foundVia = "member";
+    } else {
+      // If not member, check if lead
+      lead = await HouseholdLead.findOne({ userId });
+      foundVia = "lead";
+    }
+
+    if (!lead) {
+      return res.status(404).json({
+        message: "User is not associated with any household",
+      });
+    }
+
+    // Business rules
+    if (rescueStatus === "pending" && lead.rescueStatus !== "none") {
+      return res.status(409).json({
+        message: `Rescue already requested. Current status: ${lead.rescueStatus}`,
+      });
+    }
+
+    if (lead.rescueStatus === rescueStatus) {
+      return res.status(200).json({
+        message: `Rescue status already ${rescueStatus}`,
+        noChange: true,
+      });
+    }
+
+    // Focused update only
+    const previousStatus = lead.rescueStatus;
+    const updatedLead = await HouseholdLead.findByIdAndUpdate(
+      lead._id,
+      { rescueStatus, updatedAt: new Date() },
+      { new: true } // return updated document
+    );
+
+    // Response
+    res.status(200).json({
+      message: `Rescue status updated from ${previousStatus} to ${rescueStatus}`,
+      householdCode: updatedLead.householdCode,
+      previousStatus,
+      currentStatus: updatedLead.rescueStatus,
+      foundVia,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+};

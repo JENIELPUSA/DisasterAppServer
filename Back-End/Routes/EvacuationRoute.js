@@ -13,5 +13,8 @@ router
   .route("/:id")
   .delete(authController.protect, EvacuationController.deleteEvacuation)
   .patch(authController.protect, EvacuationController.updateEvacuation);
+router
+  .route("/DisplayNearbyEvacuations")
+  .post(authController.protect, EvacuationController.DisplayNearbyEvacuations);
 
 module.exports = router;

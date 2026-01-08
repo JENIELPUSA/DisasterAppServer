@@ -11,20 +11,15 @@ import {
   TextInput,
   Alert,
 } from "react-native";
-import * as Location from 'expo-location';
+import * as Location from "expo-location";
 
 const RegistrationWizard = ({
   onBackToLogin,
-  // Registration props
-  roleModalVisible,
   setRoleModalVisible,
   selectedRole,
-  setSelectedRole,
   currentStep,
-  setCurrentStep,
   registrationData,
   handleInputChange,
-  roles,
   handleNextStep,
   prevStep,
   handleSubmitRegistration,
@@ -34,35 +29,39 @@ const RegistrationWizard = ({
   showFilteredHouseholdLeadDropdown,
   setShowRelationshipDropdown,
   showDatepicker,
-  isLoadingHouseholdLeads,
   DropdowndataLead,
   filteredHouseholdLeads,
-  calculateAge,
   setShowRegisterBarangayModal,
   isRegisteringNewBarangay,
   newBarangayName,
-  setIsRegisteringNewBarangay,
-  setNewBarangayName,
+  municipalities,
 }) => {
   // Local state for location loading
   const [localIsGettingLocation, setLocalIsGettingLocation] = useState(false);
   const [locationError, setLocationError] = useState(null);
-
+  // State for municipality dropdown
+  const [showMunicipalityDropdown, setShowMunicipalityDropdown] = useState(false);
+  
+  // Function to get selected municipality name by ID
+  const getMunicipalityNameById = (id) => {
+    if (!id || !municipalities) return "";
+    const municipality = municipalities.find(m => m._id === id);
+    return municipality ? municipality.municipalityName : "";
+  };
+  
   // Function to get GPS location
   const handleGetGPSLocation = async () => {
     try {
       setLocalIsGettingLocation(true);
       setLocationError(null);
-      
-      console.log("Requesting location permissions...");
 
       // Request permission
       let { status } = await Location.requestForegroundPermissionsAsync();
-      
-      console.log("Location permission status:", status);
-      
-      if (status !== 'granted') {
-        setLocationError('Location permission denied. Please enable location services in settings.');
+
+      if (status !== "granted") {
+        setLocationError(
+          "Location permission denied. Please enable location services in settings."
+        );
         setLocalIsGettingLocation(false);
         Alert.alert(
           "Location Permission Required",
@@ -72,30 +71,16 @@ const RegistrationWizard = ({
         return;
       }
 
-      console.log("Getting current position...");
-      
       // Get current location
       let location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
         timeout: 15000, // 15 seconds timeout
       });
-
-      console.log("Location received:", location.coords);
-      
       const { latitude, longitude } = location.coords;
-      
       // Update registration data with GPS coordinates
-      // IMPORTANT: Save as strings for FormData, but ensure they are valid numbers
       handleInputChange("gpsCoordinates", `${latitude},${longitude}`);
       handleInputChange("latitude", latitude.toString());
       handleInputChange("longitude", longitude.toString());
-      
-      console.log("Updated registration data with GPS:", {
-        latitude: latitude.toString(),
-        longitude: longitude.toString(),
-        gpsCoordinates: `${latitude},${longitude}`
-      });
-
       // Get address from coordinates (reverse geocoding)
       try {
         let geocode = await Location.reverseGeocodeAsync({
@@ -111,11 +96,13 @@ const RegistrationWizard = ({
             address.city,
             address.region,
             address.country,
-            address.postalCode
-          ].filter(Boolean).join(", ");
-          
+            address.postalCode,
+          ]
+            .filter(Boolean)
+            .join(", ");
+
           console.log("Reverse geocode result:", formattedAddress);
-          
+
           if (formattedAddress) {
             handleInputChange("address", formattedAddress);
           }
@@ -131,25 +118,22 @@ const RegistrationWizard = ({
         "Your GPS location has been successfully captured.",
         [{ text: "OK" }]
       );
-      
     } catch (error) {
       console.error("Error getting location:", error);
-      let errorMsg = 'Failed to get location. Please try again.';
-      
-      if (error.code === 'E_LOCATION_TIMEOUT') {
-        errorMsg = 'Location request timeout. Please ensure location services are enabled and try again.';
-      } else if (error.code === 'E_LOCATION_UNAVAILABLE') {
-        errorMsg = 'Location services are unavailable. Please check your device settings.';
+      let errorMsg = "Failed to get location. Please try again.";
+
+      if (error.code === "E_LOCATION_TIMEOUT") {
+        errorMsg =
+          "Location request timeout. Please ensure location services are enabled and try again.";
+      } else if (error.code === "E_LOCATION_UNAVAILABLE") {
+        errorMsg =
+          "Location services are unavailable. Please check your device settings.";
       }
-      
+
       setLocationError(errorMsg);
       setLocalIsGettingLocation(false);
-      
-      Alert.alert(
-        "Location Error",
-        errorMsg,
-        [{ text: "OK" }]
-      );
+
+      Alert.alert("Location Error", errorMsg, [{ text: "OK" }]);
     }
   };
 
@@ -211,6 +195,60 @@ const RegistrationWizard = ({
     }
   };
 
+  // Municipality Modal Component
+  const MunicipalityModal = () => (
+    <Modal
+      visible={showMunicipalityDropdown}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowMunicipalityDropdown(false)}
+    >
+      <TouchableOpacity 
+        activeOpacity={1}
+        onPress={() => setShowMunicipalityDropdown(false)}
+        className="flex-1 justify-end bg-black bg-opacity-50"
+      >
+        <View className="bg-white rounded-t-3xl p-6 max-h-96">
+          <View className="flex-row justify-between items-center mb-4">
+            <Text className="text-xl font-bold text-gray-800">
+              Select Municipality
+            </Text>
+            <TouchableOpacity onPress={() => setShowMunicipalityDropdown(false)}>
+              <Text className="text-2xl text-gray-400">×</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView>
+            {municipalities && municipalities.length > 0 ? (
+              municipalities.map((municipality) => (
+                <TouchableOpacity
+                  key={municipality._id}
+                  onPress={() => {
+                    console.log("Selecting municipality ID:", municipality._id, "Name:", municipality.municipalityName);
+                    // Save both ID and name
+                    handleInputChange("municipalityId", municipality._id);
+                    handleInputChange("municipality", municipality.municipalityName); // Keep name for display
+                    setShowMunicipalityDropdown(false);
+                  }}
+                  className="py-4 border-b border-gray-200"
+                >
+                  <Text className="text-lg text-gray-800">
+                    {municipality.municipalityName}
+                  </Text>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View className="py-4">
+                <Text className="text-gray-500 text-center">
+                  No municipalities available
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   const renderStepContent = () => {
     const availableLeads =
       filteredHouseholdLeads.length > 0
@@ -246,18 +284,47 @@ const RegistrationWizard = ({
               <TextInput
                 placeholder="Enter your contact number"
                 value={registrationData.contactNumber}
-                onChangeText={(value) => handleInputChange("contactNumber", value)}
+                onChangeText={(value) =>
+                  handleInputChange("contactNumber", value)
+                }
                 keyboardType="phone-pad"
                 className="border border-gray-300 rounded-xl p-4 bg-gray-50"
               />
             </View>
 
+            {/* Municipality Dropdown */}
             <View>
               <Text className="text-sm font-semibold text-gray-700 mb-1">
-                Address (Optional)
+                Municipality *
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowMunicipalityDropdown(true)}
+                className="border border-gray-300 rounded-xl p-4 bg-gray-50 justify-center min-h-[60px]"
+              >
+                {registrationData.municipality ? (
+                  <Text className="text-gray-800">
+                    {registrationData.municipality}
+                  </Text>
+                ) : (
+                  <Text className="text-gray-500">
+                    Select municipality
+                  </Text>
+                )}
+              </TouchableOpacity>
+              {/* Debug info (remove in production) */}
+              {registrationData.municipalityId && (
+                <Text className="text-xs text-gray-400 mt-1">
+                  Municipality ID: {registrationData.municipalityId}
+                </Text>
+              )}
+            </View>
+
+            <View>
+              <Text className="text-sm font-semibold text-gray-700 mb-1">
+                Street Address (Optional)
               </Text>
               <TextInput
-                placeholder="Enter your complete address (Optional)"
+                placeholder="Enter your street address (Optional)"
                 value={registrationData.address}
                 onChangeText={(value) => handleInputChange("address", value)}
                 multiline
@@ -312,7 +379,9 @@ const RegistrationWizard = ({
               <TextInput
                 placeholder="Confirm your password"
                 value={registrationData.confirmPassword}
-                onChangeText={(value) => handleInputChange("confirmPassword", value)}
+                onChangeText={(value) =>
+                  handleInputChange("confirmPassword", value)
+                }
                 secureTextEntry
                 className="border border-gray-300 rounded-xl p-4 bg-gray-50"
               />
@@ -369,7 +438,9 @@ const RegistrationWizard = ({
                   <TextInput
                     placeholder="Enter your organization"
                     value={registrationData.organization}
-                    onChangeText={(value) => handleInputChange("organization", value)}
+                    onChangeText={(value) =>
+                      handleInputChange("organization", value)
+                    }
                     className="border border-gray-300 rounded-xl p-4 bg-gray-50"
                   />
                 </View>
@@ -381,7 +452,9 @@ const RegistrationWizard = ({
                   <TextInput
                     placeholder="Enter your ID number"
                     value={registrationData.idNumber}
-                    onChangeText={(value) => handleInputChange("idNumber", value)}
+                    onChangeText={(value) =>
+                      handleInputChange("idNumber", value)
+                    }
                     className="border border-gray-300 rounded-xl p-4 bg-gray-50"
                   />
                 </View>
@@ -401,7 +474,9 @@ const RegistrationWizard = ({
                   <TextInput
                     placeholder="Enter number of family members"
                     value={registrationData.familyMembers}
-                    onChangeText={(value) => handleInputChange("familyMembers", value)}
+                    onChangeText={(value) =>
+                      handleInputChange("familyMembers", value)
+                    }
                     keyboardType="numeric"
                     className="border border-gray-300 rounded-xl p-4 bg-gray-50"
                   />
@@ -416,9 +491,13 @@ const RegistrationWizard = ({
                     className="border border-gray-300 rounded-xl p-4 bg-gray-50 justify-center min-h-[60px]"
                   >
                     {registrationData.barangay ? (
-                      <Text className="text-gray-800">{registrationData.barangay}</Text>
+                      <Text className="text-gray-800">
+                        {registrationData.barangay}
+                      </Text>
                     ) : (
-                      <Text className="text-gray-500">Select barangay (Optional)</Text>
+                      <Text className="text-gray-500">
+                        Select barangay (Optional)
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -429,13 +508,13 @@ const RegistrationWizard = ({
                     Household Location (GPS) *
                     <Text className="text-red-500"> (Required)</Text>
                   </Text>
-                  
+
                   <TouchableOpacity
                     onPress={handleGetGPSLocation}
                     disabled={localIsGettingLocation}
                     className={`border rounded-xl p-4 justify-center min-h-[60px] mb-2 ${
-                      registrationData.latitude && registrationData.longitude 
-                        ? "border-green-500 bg-green-50" 
+                      registrationData.latitude && registrationData.longitude
+                        ? "border-green-500 bg-green-50"
                         : "border-gray-300 bg-blue-50"
                     }`}
                   >
@@ -446,7 +525,8 @@ const RegistrationWizard = ({
                           Getting your location...
                         </Text>
                       </View>
-                    ) : registrationData.latitude && registrationData.longitude ? (
+                    ) : registrationData.latitude &&
+                      registrationData.longitude ? (
                       <View>
                         <View className="flex-row items-center">
                           <Text className="text-green-600 text-lg mr-2">✓</Text>
@@ -477,13 +557,15 @@ const RegistrationWizard = ({
                       </View>
                     )}
                   </TouchableOpacity>
-                  
+
                   {locationError && (
                     <View className="p-3 bg-red-50 rounded-lg border border-red-200 mt-2">
-                      <Text className="text-red-600 text-sm">{locationError}</Text>
+                      <Text className="text-red-600 text-sm">
+                        {locationError}
+                      </Text>
                     </View>
                   )}
-                  
+
                   {registrationData.latitude && registrationData.longitude && (
                     <TouchableOpacity
                       onPress={clearLocation}
@@ -494,14 +576,18 @@ const RegistrationWizard = ({
                       </Text>
                     </TouchableOpacity>
                   )}
-                  
+
                   <Text className="text-xs text-gray-500 mt-2">
-                    <Text className="font-semibold">Important:</Text> GPS location is required for household leads to help rescuers locate your household during emergencies.
+                    <Text className="font-semibold">Important:</Text> GPS
+                    location is required for household leads to help rescuers
+                    locate your household during emergencies.
                   </Text>
-                  
+
                   <View className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                     <Text className="text-xs text-yellow-800">
-                      <Text className="font-semibold">Note:</Text> Ensure your location services are enabled and you're in a place with good GPS signal.
+                      <Text className="font-semibold">Note:</Text> Ensure your
+                      location services are enabled and you're in a place with
+                      good GPS signal.
                     </Text>
                   </View>
                 </View>
@@ -514,17 +600,29 @@ const RegistrationWizard = ({
                     </Text>
                     <View className="space-y-1">
                       <View className="flex-row">
-                        <Text className="text-xs font-medium text-gray-700 w-20">Latitude:</Text>
-                        <Text className="text-xs text-gray-800 flex-1">{registrationData.latitude}</Text>
+                        <Text className="text-xs font-medium text-gray-700 w-20">
+                          Latitude:
+                        </Text>
+                        <Text className="text-xs text-gray-800 flex-1">
+                          {registrationData.latitude}
+                        </Text>
                       </View>
                       <View className="flex-row">
-                        <Text className="text-xs font-medium text-gray-700 w-20">Longitude:</Text>
-                        <Text className="text-xs text-gray-800 flex-1">{registrationData.longitude}</Text>
+                        <Text className="text-xs font-medium text-gray-700 w-20">
+                          Longitude:
+                        </Text>
+                        <Text className="text-xs text-gray-800 flex-1">
+                          {registrationData.longitude}
+                        </Text>
                       </View>
                       {registrationData.address && (
                         <View className="flex-row">
-                          <Text className="text-xs font-medium text-gray-700 w-20">Address:</Text>
-                          <Text className="text-xs text-gray-800 flex-1">{registrationData.address}</Text>
+                          <Text className="text-xs font-medium text-gray-700 w-20">
+                            Address:
+                          </Text>
+                          <Text className="text-xs text-gray-800 flex-1">
+                            {registrationData.address}
+                          </Text>
                         </View>
                       )}
                     </View>
@@ -557,9 +655,13 @@ const RegistrationWizard = ({
                         className="border border-gray-300 rounded-xl p-4 bg-gray-50 justify-center min-h-[60px]"
                       >
                         {registrationData.barangay ? (
-                          <Text className="text-gray-800">{registrationData.barangay}</Text>
+                          <Text className="text-gray-800">
+                            {registrationData.barangay}
+                          </Text>
                         ) : (
-                          <Text className="text-gray-500">Select barangay (Optional)</Text>
+                          <Text className="text-gray-500">
+                            Select barangay (Optional)
+                          </Text>
                         )}
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -581,7 +683,9 @@ const RegistrationWizard = ({
                   <TextInput
                     placeholder="Enter your official ID number"
                     value={registrationData.idNumber}
-                    onChangeText={(value) => handleInputChange("idNumber", value)}
+                    onChangeText={(value) =>
+                      handleInputChange("idNumber", value)
+                    }
                     className="border border-gray-300 rounded-xl p-4 bg-gray-50"
                   />
                 </View>
@@ -603,9 +707,13 @@ const RegistrationWizard = ({
                     className="border border-gray-300 rounded-xl p-4 bg-gray-50 justify-center min-h-[60px]"
                   >
                     {registrationData.barangay ? (
-                      <Text className="text-gray-800">{registrationData.barangay}</Text>
+                      <Text className="text-gray-800">
+                        {registrationData.barangay}
+                      </Text>
                     ) : (
-                      <Text className="text-gray-500">Select barangay (Optional)</Text>
+                      <Text className="text-gray-500">
+                        Select barangay (Optional)
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -619,9 +727,13 @@ const RegistrationWizard = ({
                     className="border border-gray-300 rounded-xl p-4 bg-gray-50 justify-center min-h-[60px]"
                   >
                     {registrationData.householdLead ? (
-                      <Text className="text-gray-800">{registrationData.householdLead}</Text>
+                      <Text className="text-gray-800">
+                        {registrationData.householdLead}
+                      </Text>
                     ) : (
-                      <Text className="text-gray-500">Select household lead (Optional)</Text>
+                      <Text className="text-gray-500">
+                        Select household lead (Optional)
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -635,9 +747,13 @@ const RegistrationWizard = ({
                     className="border border-gray-300 rounded-xl p-4 bg-gray-50 justify-center min-h-[60px]"
                   >
                     {registrationData.relationship ? (
-                      <Text className="text-gray-800">{registrationData.relationship}</Text>
+                      <Text className="text-gray-800">
+                        {registrationData.relationship}
+                      </Text>
                     ) : (
-                      <Text className="text-gray-500">Select relationship (Optional)</Text>
+                      <Text className="text-gray-500">
+                        Select relationship (Optional)
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -651,7 +767,9 @@ const RegistrationWizard = ({
                     className="border border-gray-300 rounded-xl p-4 bg-gray-50 justify-center min-h-[60px]"
                   >
                     {registrationData.birthDate ? (
-                      <Text className="text-gray-800">{registrationData.birthDate}</Text>
+                      <Text className="text-gray-800">
+                        {registrationData.birthDate}
+                      </Text>
                     ) : (
                       <Text className="text-gray-500">Select birth date</Text>
                     )}
@@ -665,7 +783,9 @@ const RegistrationWizard = ({
                   <TextInput
                     placeholder="Enter disability if any"
                     value={registrationData.disability}
-                    onChangeText={(value) => handleInputChange("disability", value)}
+                    onChangeText={(value) =>
+                      handleInputChange("disability", value)
+                    }
                     className="border border-gray-300 rounded-xl p-4 bg-gray-50"
                   />
                 </View>
@@ -682,17 +802,9 @@ const RegistrationWizard = ({
   // Check if household lead has required GPS
   const hasRequiredGPS = () => {
     if (selectedRole?.value !== "household_lead") return true;
-    
+
     const hasLatLong = registrationData.latitude && registrationData.longitude;
     const hasGpsString = registrationData.gpsCoordinates;
-    
-    console.log("GPS Check:", {
-      hasLatLong,
-      hasGpsString,
-      latitude: registrationData.latitude,
-      longitude: registrationData.longitude
-    });
-    
     return hasLatLong || hasGpsString;
   };
 
@@ -701,7 +813,10 @@ const RegistrationWizard = ({
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1 bg-white"
     >
-      <ScrollView className="flex-1 px-5 pt-10 pb-6" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1 px-5 pt-10 pb-6"
+        showsVerticalScrollIndicator={false}
+      >
         {/* Back button */}
         <TouchableOpacity
           onPress={onBackToLogin}
@@ -770,21 +885,22 @@ const RegistrationWizard = ({
               className="flex-1 h-14 rounded-2xl justify-center items-center bg-blue-400 ml-2"
               disabled={isSignupLoading || localIsGettingLocation}
             >
-              <Text className="text-base font-bold text-white">
-                Next
-              </Text>
+              <Text className="text-base font-bold text-white">Next</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
               onPress={handleSubmitRegistration}
               className="flex-1 h-14 rounded-2xl justify-center items-center bg-green-500 ml-2"
               disabled={
-                isSignupLoading || 
-                localIsGettingLocation || 
+                isSignupLoading ||
+                localIsGettingLocation ||
                 (selectedRole?.value === "household_lead" && !hasRequiredGPS())
               }
               style={{
-                opacity: (selectedRole?.value === "household_lead" && !hasRequiredGPS()) ? 0.5 : 1
+                opacity:
+                  selectedRole?.value === "household_lead" && !hasRequiredGPS()
+                    ? 0.5
+                    : 1,
               }}
             >
               {isSignupLoading ? (
@@ -805,17 +921,19 @@ const RegistrationWizard = ({
               ⚠ GPS Location Required
             </Text>
             <Text className="text-red-500 text-xs mt-1">
-              You must get your GPS location to complete registration as a household lead.
+              You must get your GPS location to complete registration as a
+              household lead.
             </Text>
           </View>
         )}
 
         <View className="flex-row justify-center mt-4">
-          <Text className="text-sm text-gray-500">
-            Step {currentStep} of 3
-          </Text>
+          <Text className="text-sm text-gray-500">Step {currentStep} of 3</Text>
         </View>
       </ScrollView>
+
+      {/* Municipality Modal */}
+      <MunicipalityModal />
     </KeyboardAvoidingView>
   );
 };

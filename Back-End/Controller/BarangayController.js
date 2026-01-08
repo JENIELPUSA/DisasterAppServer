@@ -1,29 +1,39 @@
 const Barangay = require("../Models/Barangay");
+const mongoose = require("mongoose");
 const AsyncErrorHandler = require("../Utils/AsyncErrorHandler");
 exports.createBarangay = AsyncErrorHandler(async (req, res) => {
-  const { barangayName, municipality, coordinates, fullAddress } = req.body;
+  try {
+    const { barangayName, municipality, coordinates, fullAddress } = req.body;
 
-  // Check if barangay already exists
-  const existing = await Barangay.findOne({ barangayName });
-  if (existing) {
-    return res.status(400).json({
-      status: "fail",
-      message: "Barangay already exists.",
+    console.log("req.body", req.body);
+
+    // Check if barangay already exists
+    const existing = await Barangay.findOne({ barangayName });
+    if (existing) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Barangay already exists.",
+      });
+    }
+
+    const barangay = await Barangay.create({
+      barangayName,
+      municipality,
+      coordinates,
+      fullAddress,
+    });
+
+    res.status(201).json({
+      status: "success",
+      message: "Barangay created successfully.",
+      data: barangay,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "error",
+      message: error.message,
     });
   }
-
-  const barangay = await Barangay.create({
-    barangayName,
-    municipality,
-    coordinates,
-    fullAddress,
-  });
-
-  res.status(201).json({
-    status: "success",
-    message: "Barangay created successfully.",
-    data: barangay,
-  });
 });
 
 // Get all Barangays with pagination & search
@@ -35,7 +45,8 @@ exports.displayBarangays = AsyncErrorHandler(async (req, res) => {
   const { search = "", city } = req.query;
 
   const matchStage = {};
-  if (search.trim()) matchStage.barangayName = { $regex: new RegExp(search.trim(), "i") }; // <-- use barangayName
+  if (search.trim())
+    matchStage.barangayName = { $regex: new RegExp(search.trim(), "i") }; // <-- use barangayName
   if (city) matchStage.city = city;
 
   const pipeline = [
@@ -97,7 +108,7 @@ exports.updateBarangay = AsyncErrorHandler(async (req, res) => {
     "barangayName",
     "municipality",
     "fullAddress",
-    "coordinates"
+    "coordinates",
   ];
 
   const updateData = {};
@@ -121,7 +132,6 @@ exports.updateBarangay = AsyncErrorHandler(async (req, res) => {
   });
 });
 
-
 // Delete Barangay
 exports.deleteBarangay = AsyncErrorHandler(async (req, res) => {
   const id = req.params.id;
@@ -144,22 +154,137 @@ exports.deleteBarangay = AsyncErrorHandler(async (req, res) => {
 
 // Get Barangays for Dropdown
 exports.getBarangays = AsyncErrorHandler(async (req, res, next) => {
-<<<<<<< HEAD
-  const data = await Barangay.find()
-    .select('barangayName')
-=======
   const barangays = await Barangay.find()
-    .select('barangayName') // Only include barangayName
->>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
+    .select("barangayName") // Only include barangayName
     .sort({ barangayName: 1 });
 
   res.status(200).json({
     success: true,
-    count: data.length,
-<<<<<<< HEAD
-    data
-=======
-    data: barangays
->>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
+    count: barangays.length, // fixed
+    data: barangays, // fixed
   });
 });
+
+exports.displayBarangaysForUser = AsyncErrorHandler(async (req, res) => {
+  const { search = "", page = 1, limit = 20, MunicipalityId } = req.query;
+  const skip = (page - 1) * limit;
+
+  if (!MunicipalityId) {
+    return res.status(400).json({
+      status: "fail",
+      message: "User does not have a MunicipalityId",
+    });
+  }
+
+  const matchStage = {
+    municipality: new mongoose.Types.ObjectId(MunicipalityId),
+  };
+  if (search.trim()) {
+    matchStage.barangayName = { $regex: new RegExp(search.trim(), "i") };
+  }
+
+  const pipeline = [
+    { $match: matchStage },
+    {
+      $lookup: {
+        from: "municipalities", // collection name
+        localField: "municipality", // field sa Barangay
+        foreignField: "_id", // field sa Municipality
+        as: "municipality",
+      },
+    },
+    { $unwind: "$municipality" }, // para gawing object lang
+    { $sort: { createdAt: -1 } },
+    {
+      $facet: {
+        data: [{ $skip: skip }, { $limit: parseInt(limit) }],
+        totalCount: [{ $count: "count" }],
+      },
+    },
+  ];
+
+  const result = await Barangay.aggregate(pipeline);
+  const data = result[0].data.map((item) => ({
+    _id: item._id,
+    barangayName: item.barangayName,
+    fullAddress: item.fullAddress,
+    coordinates: item.coordinates,
+    municipality: {
+      id: item.municipality._id,
+      name: item.municipality.municipalityName,
+    },
+  }));
+
+  const total = result[0].totalCount[0]?.count || 0;
+
+  res.status(200).json({
+    status: "success",
+    data,
+    totalItems: total,
+    currentPage: parseInt(page),
+    totalPages: Math.ceil(total / limit),
+  });
+});
+
+exports.dropdownbarangayformaps = AsyncErrorHandler(async (req, res) => {
+  const MunicipalityId = req.user.MunicipalityId;
+  const { search = "", page = 1, limit = 20 } = req.query;
+
+  if (!MunicipalityId) {
+    return res.status(400).json({
+      status: "fail",
+      message: "User does not have a MunicipalityId",
+    });
+  }
+
+  const pageNum = parseInt(page);
+  const limitNum = parseInt(limit);
+  const skip = (pageNum - 1) * limitNum;
+
+  const matchStage = {
+    municipality: new mongoose.Types.ObjectId(MunicipalityId),
+  };
+
+  if (search.trim()) {
+    matchStage.barangayName = { $regex: search.trim(), $options: "i" };
+  }
+
+  const pipeline = [
+    { $match: matchStage },
+    {
+      $lookup: {
+        from: "municipalities",
+        localField: "municipality",
+        foreignField: "_id",
+        as: "municipalityInfo",
+      },
+    },
+    { $unwind: "$municipalityInfo" },
+    { $sort: { createdAt: -1 } },
+    {
+      $facet: {
+        data: [{ $skip: skip }, { $limit: limitNum }],
+        totalCount: [{ $count: "count" }],
+      },
+    },
+  ];
+
+  const result = await Barangay.aggregate(pipeline);
+  const barangays = result[0]?.data || [];
+  const total = result[0]?.totalCount[0]?.count || 0;
+
+  const data = barangays.map((item) => ({
+    _id: item._id,
+    barangayName: item.barangayName,
+    fullAddress: item.fullAddress,
+  }));
+
+  res.status(200).json({
+    status: "success",
+    data,
+    totalItems: total,
+    currentPage: pageNum,
+    totalPages: Math.ceil(total / limitNum),
+  });
+});
+

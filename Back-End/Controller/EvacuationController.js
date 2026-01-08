@@ -1,11 +1,30 @@
 const Evacuation = require("../Models/EvacuationModel");
 const AsyncErrorHandler = require("../Utils/AsyncErrorHandler");
+const mongoose = require("mongoose");
 
 exports.createEvacuation = async (req, res) => {
   try {
-    const { evacuationName,location } = req.body;
+    console.log("req.body", req.body);
 
-    // Check if evacuation center with the same name exists
+    const {
+      evacuationName,
+      location,
+      evacuationCapacity,
+      totalHouseholds,
+      contactPerson,
+      isActive,
+      barangay,
+    } = req.body;
+
+    // Validation
+    if (!barangay?._id || !barangay?.municipality?.id) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Barangay or Municipality ID is missing",
+      });
+    }
+
+    // Check duplicate
     const existing = await Evacuation.findOne({ evacuationName });
     if (existing) {
       return res.status(400).json({
@@ -14,8 +33,18 @@ exports.createEvacuation = async (req, res) => {
       });
     }
 
-    // Create new evacuation center
-    const evacuation = await Evacuation.create(req.body);
+    // ✅ SAVE IDS ONLY
+    const evacuation = await Evacuation.create({
+      evacuationName,
+      location,
+      evacuationCapacity,
+      totalHouseholds,
+      contactPerson,
+      isActive,
+
+      barangay: new mongoose.Types.ObjectId(barangay._id),
+      municipality: new mongoose.Types.ObjectId(barangay.municipality.id),
+    });
 
     res.status(201).json({
       status: "success",
@@ -32,7 +61,6 @@ exports.createEvacuation = async (req, res) => {
     });
   }
 };
-
 
 exports.deleteEvacuation = AsyncErrorHandler(async (req, res) => {
   const id = req.params.id;
@@ -107,11 +135,11 @@ exports.DisplayEvacuation = AsyncErrorHandler(async (req, res) => {
           {
             $project: {
               evacuationName: 1,
-              totalHouseholds:1,
-              evacuationCapacity:1,
-              location:1,
-              contactPerson:1,
-              isActive:1,
+              totalHouseholds: 1,
+              evacuationCapacity: 1,
+              location: 1,
+              contactPerson: 1,
+              isActive: 1,
               createdAt: 1,
               "barangay.barangayName": 1,
               "barangay.municipality": 1,
@@ -139,6 +167,119 @@ exports.DisplayEvacuation = AsyncErrorHandler(async (req, res) => {
   });
 });
 
+exports.DisplayNearbyEvacuations = async (req, res) => {
+  try {
+    const municipalityId = req.user.MunicipalityId;
+    const role = req.user.role;
+
+
+    console.log("municipalityId",municipalityId)
+      console.log("role",role)
+
+    const { latitude, longitude } = req.body;
+
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Valid coordinates required",
+      });
+    }
+
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+
+    const limitedRoles = ["household_lead", "brgy_captain", "household_member"];
+    const isLimited = limitedRoles.includes(role);
+
+    // 🔹 Base match: lahat sa sariling municipality at active
+    let matchStage = {
+      municipality: municipalityId,
+      isActive: true,
+    };
+
+    // 🔹 Only for restricted roles, filter for available capacity
+    if (isLimited) {
+      matchStage.$expr = { $lt: ["$totalHouseholds", "$evacuationCapacity"] };
+    }
+
+    const pipeline = [
+      { $match: matchStage },
+
+      // 🔹 Compute distance (Haversine)
+      {
+        $addFields: {
+          distance: {
+            $let: {
+              vars: {
+                lat1Rad: { $multiply: ["$location.latitude", Math.PI / 180] },
+                lon1Rad: { $multiply: ["$location.longitude", Math.PI / 180] },
+                lat2Rad: lat * (Math.PI / 180),
+                lon2Rad: lng * (Math.PI / 180),
+              },
+              in: {
+                $multiply: [
+                  6371000,
+                  {
+                    $acos: {
+                      $add: [
+                        {
+                          $multiply: [
+                            { $sin: "$$lat1Rad" },
+                            { $sin: "$$lat2Rad" },
+                          ],
+                        },
+                        {
+                          $multiply: [
+                            { $cos: "$$lat1Rad" },
+                            { $cos: "$$lat2Rad" },
+                            { $cos: { $subtract: ["$$lon2Rad", "$$lon1Rad"] } },
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+
+      // 🔹 Sort nearest first
+      { $sort: { distance: 1, createdAt: -1 } },
+
+      // 🔹 Limit only for restricted roles
+      ...(isLimited ? [{ $limit: 1 }] : []),
+
+      // 🔹 Project only evacuation fields
+      {
+        $project: {
+          evacuationName: 1,
+          totalHouseholds: 1,
+          evacuationCapacity: 1,
+          location: 1,
+          contactPerson: 1,
+          isActive: 1,
+          distance: 1,
+        },
+      },
+    ];
+
+    const result = await Evacuation.aggregate(pipeline);
+
+    res.status(200).json({
+      status: "success",
+      data: result,
+      totalItems: result.length,
+    });
+  } catch (error) {
+    console.error("DisplayNearbyEvacuations Error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Server error",
+    });
+  }
+};
 
 exports.DisplayOneEvacuation = AsyncErrorHandler(async (req, res) => {
   const id = req.params.id;
@@ -157,7 +298,6 @@ exports.DisplayOneEvacuation = AsyncErrorHandler(async (req, res) => {
   });
 });
 
-
 exports.updateEvacuation = AsyncErrorHandler(async (req, res) => {
   try {
     console.log("PassData", req.body);
@@ -172,13 +312,13 @@ exports.updateEvacuation = AsyncErrorHandler(async (req, res) => {
     }
 
     const allowedFields = [
-       "evacuationName",
+      "evacuationName",
       "totalHouseholds",
       "evacuationCapacity",
       "currentEvacuation",
       "location",
       "contactPerson",
-      "isActive"
+      "isActive",
     ];
 
     const updateData = {};
@@ -207,7 +347,6 @@ exports.updateEvacuation = AsyncErrorHandler(async (req, res) => {
     });
   }
 });
-
 
 exports.toggleEvacuationStatus = AsyncErrorHandler(async (req, res) => {
   const id = req.params.id;

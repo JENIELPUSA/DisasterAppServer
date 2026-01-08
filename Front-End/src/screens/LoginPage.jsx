@@ -14,21 +14,17 @@ import LoginForm from "../components/LoginForm";
 import { AuthContext } from "../contexts/AuthContext";
 import { HouseholdContext } from "../contexts/HouseholdLeadContext/HouseholdContext";
 import LoadingOverlay from "../ReusableComponent/LoadingOverlay";
-<<<<<<< HEAD
 import { BarangayDisplayContext } from "../contexts/BrgyContext/BarangayContext";
+import { MunicipalityContext } from "../contexts/MunicipalityContext/MunicipalityContext";
 
-=======
-import { BarangayDisplayContext } from "../contexts/BrgyContext/BarangayContext"
->>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
 export default function LoginPage({ navigation }) {
   const { isBarangaysDropdown } = useContext(BarangayDisplayContext);
-  const { login, signup, checkEmailAvailability } = useContext(AuthContext); // Added signup and checkEmailAvailability
-<<<<<<< HEAD
+  const { login, signup, checkEmailAvailability } = useContext(AuthContext);
   const { DropdowndataLead, fetchDropdownAllLead, loading } =
     useContext(HouseholdContext);
-=======
-  const { isBarangaysDropdown } = useContext(BarangayDisplayContext)
->>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
+
+  const { municipalities } = useContext(MunicipalityContext);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -51,8 +47,6 @@ export default function LoginPage({ navigation }) {
       setIsLoading(false);
     }
   };
-
-  console.log("DropdowndataLead", DropdowndataLead);
 
   const carouselSlides = [
     {
@@ -102,7 +96,7 @@ export default function LoginPage({ navigation }) {
   ];
 
   const loginSlide = {
-    id: 4,
+    id: 5,
     title: "Let's Get Started!",
     description: "...",
     image: require("../../assets/SagipLogo.png"),
@@ -155,9 +149,10 @@ export default function LoginPage({ navigation }) {
             DropdowndataLead={DropdowndataLead}
             BarangaysDropdownData={isBarangaysDropdown}
             slide={loginSlide}
-            signup={signup} // PASS THE SIGNUP FUNCTION
-            checkEmailAvailability={checkEmailAvailability} // PASS EMAIL CHECK FUNCTION
-            navigation={navigation} // PASS NAVIGATION FOR REDIRECTS
+            signup={signup}
+            checkEmailAvailability={checkEmailAvailability}
+            navigation={navigation}
+            municipalities={municipalities}
           />
         </KeyboardAvoidingView>
       )}

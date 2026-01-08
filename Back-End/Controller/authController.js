@@ -12,10 +12,14 @@ const HouseholdMember = require("../Models/HouseholdMember");
 const crypto = require("crypto");
 const sendEmail = require("./../Utils/email");
 const cloudinary = require("../Utils/cloudinary");
-const signToken = (id, role, linkId) => {
-  return jwt.sign({ id, role, linkId }, process.env.SECRET_STR, {
-    expiresIn: "12h",
-  });
+const signToken = (id, role, linkId, MunicipalityId) => {
+  return jwt.sign(
+    { id, role, linkId, MunicipalityId},
+    process.env.SECRET_STR,
+    {
+      expiresIn: "12h",
+    }
+  );
 };
 
 exports.signup = AsyncErrorHandler(async (req, res) => {
@@ -40,7 +44,8 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
       householdAddress,
       disability,
       birthDate,
-      
+      MunicipalityId,
+
       // GPS coordinates for household_lead
       latitude,
       longitude,
@@ -48,13 +53,16 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
       emergencyContact,
     } = req.body;
 
-    console.log("➡ Backend received data:", { 
+    console.log("req.body", req.body);
+
+    console.log("➡ Backend received data:", {
       role,
       barangayName,
+      MunicipalityId,
       latitude,
       longitude,
       gpsCoordinates,
-      familyMembers
+      familyMembers,
     });
 
     // Check if user already exists
@@ -125,6 +133,7 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
       password,
       contactNumber,
       address,
+      MunicipalityId,
       role,
       barangay: ["household_lead", "brgy_captain"].includes(role)
         ? barangayName
@@ -159,19 +168,19 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
           latitude,
           longitude,
           gpsCoordinates,
-          emergencyContact
+          emergencyContact,
         });
 
         // Parse GPS coordinates
         let lat, lng;
-        
+
         if (latitude && longitude) {
           lat = parseFloat(latitude);
           lng = parseFloat(longitude);
           console.log("Using separate lat/long:", lat, lng);
         } else if (gpsCoordinates) {
           // Parse "latitude,longitude" string
-          const coords = gpsCoordinates.split(',');
+          const coords = gpsCoordinates.split(",");
           if (coords.length >= 2) {
             lat = parseFloat(coords[0].trim());
             lng = parseFloat(coords[1].trim());
@@ -184,7 +193,8 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
           await UserLogin.findByIdAndDelete(newUser._id);
           return res.status(400).json({
             success: false,
-            message: "Valid GPS coordinates (latitude and longitude) are required for household lead registration",
+            message:
+              "Valid GPS coordinates (latitude and longitude) are required for household lead registration",
           });
         }
 
@@ -211,23 +221,23 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
           totalMembers: 1,
           location: {
             latitude: lat,
-            longitude: lng
+            longitude: lng,
           },
-          isActive: true
+          isActive: true,
         };
 
         console.log("Creating HouseholdLead with data:", householdLeadData);
-        
+
         linkedRecord = await HouseholdLead.create(householdLeadData);
         console.log("Household lead created successfully:", linkedRecord._id);
-        
+
         // Store location info for response
         locationInfo = {
           hasLocation: true,
           coordinates: `${lat},${lng}`,
           latitude: lat,
           longitude: lng,
-          barangayId: barangayId
+          barangayId: barangayId,
         };
         break;
 
@@ -363,7 +373,8 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
     // Add location info for household_lead
     if (role === "household_lead" && locationInfo) {
       response.data.locationInfo = locationInfo;
-      response.message = "Household lead registration successful with GPS location.";
+      response.message =
+        "Household lead registration successful with GPS location.";
     }
 
     if (role === "household_member") {
@@ -375,32 +386,32 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
     return res.status(201).json(response);
   } catch (error) {
     console.error("Registration Error:", error);
-    
+
     // Handle validation errors specifically
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => ({
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => ({
         field: err.path,
-        message: err.message
+        message: err.message,
       }));
-      
+
       return res.status(400).json({
         success: false,
         message: "Validation failed",
         errors: errors,
-        error: error.message
+        error: error.message,
       });
     }
-    
+
     // Handle duplicate key errors
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       return res.status(400).json({
         success: false,
         message: `Duplicate value for ${field}. Please use a different value.`,
-        error: error.message
+        error: error.message,
       });
     }
-    
+
     return res.status(500).json({
       success: false,
       message: "Something went wrong during registration.",
@@ -426,17 +437,8 @@ exports.login = AsyncErrorHandler(async (req, res, next) => {
 
   let linkId = user.linkedId || user._id;
   let zone = user.Designatedzone;
-
-  if (user.role === "patient") {
-    const patient = await Patient.findOne({ user_id: user._id });
-    if (patient) {
-      linkId = patient._id;
-      zone = patient.zone;
-    }
-  }
-
   //Generate token with role and linkId
-  const token = signToken(user._id, user.role, linkId);
+  const token = signToken(user._id, user.role, linkId, user.MunicipalityId);
 
   req.session.userId = user._id;
   req.session.isLoggedIn = true;
@@ -445,6 +447,7 @@ exports.login = AsyncErrorHandler(async (req, res, next) => {
     first_name: user.first_name,
     last_name: user.last_name,
     role: user.role,
+    MunicipalityId: user.MunicipalityId,
     Designatedzone: zone,
     linkId,
     theme: user.theme,
@@ -457,10 +460,7 @@ exports.login = AsyncErrorHandler(async (req, res, next) => {
     role: user.role,
     token,
     email: user.username,
-    Designatedzone: zone,
-    first_name: user.first_name,
-    last_name: user.last_name,
-    theme: user.theme,
+    MunicipalityId: user.MunicipalityId,
   });
 });
 
@@ -506,58 +506,6 @@ exports.verifyOtp = AsyncErrorHandler(async (req, res, next) => {
       role: user.role,
       isVerified: user.isVerified,
     },
-  });
-});
-
-exports.login = AsyncErrorHandler(async (req, res, next) => {
-  const { email, password } = req.body;
-
-  const user = await UserLogin.findOne({ username: email }).select("+password");
-
-  if (!user || !(await user.comparePasswordInDb(password, user.password))) {
-    return next(new CustomError("Incorrect email or password", 400));
-  }
-
-  if (!user.isVerified) {
-    return res.status(401).json({
-      message: "Please verify your email address before logging in.",
-    });
-  }
-
-  let linkId = user.linkedId || user._id;
-  let zone = user.Designatedzone;
-
-  if (user.role === "patient") {
-    const patient = await Patient.findOne({ user_id: user._id });
-    if (patient) {
-      linkId = patient._id;
-      zone = patient.zone;
-    }
-  }
-
-  const token = signToken(user._id, user.role, linkId);
-
-  req.session.userId = user._id;
-  req.session.isLoggedIn = true;
-  req.session.user = {
-    email: user.username,
-    first_name: user.first_name,
-    last_name: user.last_name,
-    role: user.role,
-    Designatedzone: zone,
-    linkId,
-  };
-
-  return res.status(200).json({
-    status: "Success",
-    userId: user._id,
-    linkId,
-    role: user.role,
-    token,
-    email: user.username,
-    Designatedzone: zone,
-    first_name: user.first_name,
-    last_name: user.last_name,
   });
 });
 

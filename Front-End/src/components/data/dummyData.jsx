@@ -1,3 +1,4 @@
+
 export const analyticalReportsData = {
   evacuationSummary: {
     totalEvacuated: 1250,
@@ -288,42 +289,48 @@ export const educationalVideos = [
 ];
 
 export const menuItems = [
-  { id: 2, title: "View Households", icon: "people-outline", color: "#10B981" },
+  { id: 2, title: "View Households", icon: "people-outline", color: "#10B981",roles: ['rescuer', 'brgy_captain','admin'] },
   {
     id: 3,
     title: "Report Nasirang Bahay",
     icon: "home-outline",
     color: "#EF4444",
+    roles: ['rescuer', 'household_lead', 'brgy_captain', 'household_member','admin']
   },
   {
     id: 4,
     title: "Report Baha sa Daan",
     icon: "water-outline",
     color: "#06B6D4",
+    roles: ['rescuer', 'household_lead', 'brgy_captain', 'household_member','admin']
   },
   {
     id: 5,
     title: "View Reports",
     icon: "document-text-outline",
     color: "#8B5CF6",
+    roles: ['rescuer', 'brgy_captain', 'admin']
   },
   {
     id: 6,
     title: "Analyze Damage",
     icon: "analytics-outline",
     color: "#F59E0B",
+    roles: ['rescuer', 'brgy_captain', 'admin']
   },
   {
     id: 7,
     title: "Damage Severity",
     icon: "bar-chart-outline",
     color: "#EC4899",
+    roles: ['rescuer','brgy_captain', 'admin']
   },
   {
     id: 8,
     title: "Mark Flood Areas",
     icon: "location-outline",
     color: "#0EA5E9",
+    roles: ['rescuer','brgy_captain','admin']
   },
   { id: 9, title: "Road Passability", icon: "car-outline", color: "#84CC16" },
   { id: 10, title: "View Safe Routes", icon: "map-outline", color: "#6366F1" },
@@ -332,12 +339,14 @@ export const menuItems = [
     title: "Analytical Reports",
     icon: "stats-chart-outline",
     color: "#8B5CF6",
+    roles: ['rescuer', 'brgy_captain','admin']
   },
   {
     id: 12,
     title: "View Barangay",
     icon: "business-outline",
     color: "#6366F1",
+    roles: ['rescuer', 'brgy_captain','admin']
   },
 ];
 

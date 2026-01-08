@@ -14,7 +14,9 @@ export const EvacuationDisplayContext = createContext();
 export const EvacuationDisplayProvider = ({ children }) => {
   const { authToken } = useContext(AuthContext);
 
+  // ==============================
   // STATE
+  // ==============================
   const [evacuations, setEvacuations] = useState([]);
   const [totalEvacuations, setTotalEvacuations] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -23,24 +25,26 @@ export const EvacuationDisplayProvider = ({ children }) => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null); // ✅ Added error state
+  const [nearEvacuations, setNearEvacuations] = useState([]);
 
   const backendUrl = Constants.expoConfig.extra.apiUrl;
 
   // ==============================
   // CENTRALIZED ERROR HANDLER
   // ==============================
-  const handleError = (error) => {
-    const msg = error.response?.data?.message || error.message;
+  const handleError = (err) => {
+    const msg = err.response?.data?.message || err.message;
     console.log("❌ ERROR:", msg);
+    setError(msg); // store in state
   };
 
   // ==============================
-  // FETCH EVACUATIONS
+  // FETCH ALL EVACUATIONS
   // ==============================
   const fetchEvacuation = useCallback(
     async (page = 1) => {
       if (!authToken) return;
-
       try {
         setLoading(true);
 
@@ -65,8 +69,8 @@ export const EvacuationDisplayProvider = ({ children }) => {
         setTotalEvacuations(totalItems || 0);
         setCurrentPage(responsePage || page);
         setTotalPages(responseTotalPages || 1);
-      } catch (error) {
-        handleError(error);
+      } catch (err) {
+        handleError(err);
       } finally {
         setLoading(false);
       }
@@ -74,20 +78,6 @@ export const EvacuationDisplayProvider = ({ children }) => {
     [authToken, search, dateFrom, dateTo]
   );
 
-  // ==============================
-  // TRIGGER FETCH ON FILTERS
-  // ==============================
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      fetchEvacuation(1);
-    }, 500);
-
-    return () => clearTimeout(timeout);
-  }, [search, dateFrom, dateTo, fetchEvacuation]);
-
-  // ==============================
-  // ADD EVACUATION
-  // ==============================
   const AddEvacuation = async (values) => {
     try {
       const res = await axios.post(`${backendUrl}/api/v1/Evacuation`, values, {
@@ -105,100 +95,61 @@ export const EvacuationDisplayProvider = ({ children }) => {
       };
     } catch (error) {
       const msg = error.response?.data?.message || error.message;
-      console.log("POST ERROR:", msg);
-
       return { success: false, error: msg };
     }
   };
 
   // ==============================
-  // DELETE EVACUATION
+  // FETCH NEARBY EVACUATIONS
   // ==============================
-  const deleteEvacuation = async (id) => {
-    try {
-      const res = await axios.delete(`${backendUrl}/api/v1/Evacuation/${id}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      if (res.data.status === "success") {
-        fetchEvacuation(currentPage);
-        return { success: true };
-      }
-
-      throw new Error(res.data.message || "Failed to delete evacuation");
-    } catch (error) {
-      handleError(error);
-      return { success: false, error: error.message };
+  const fetchNearbyEvacuations = async ({
+    latitude,
+    longitude,
+    maxDistance = 1000,
+  }) => {
+    if (!authToken) return;
+    if (!latitude || !longitude) {
+      setError("Latitude and longitude are required");
+      return;
     }
-  };
 
-  // ==============================
-  // UPDATE EVACUATION
-  // ==============================
-  const updateEvacuation = async (id, values) => {
+    setLoading(true);
+    setError(null);
+
     try {
-      const res = await axios.patch(
-        `${backendUrl}/api/v1/Evacuation/${id}`,
-        values,
-        { headers: { Authorization: `Bearer ${authToken}` } }
-      );
-
-      if (res.data.status === "success") {
-        fetchEvacuation(currentPage);
-        return { success: true, data: res.data.data };
-      }
-
-      throw new Error(res.data.message || "Failed to update evacuation");
-    } catch (error) {
-      handleError(error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  // ==============================
-  // TOGGLE EVACUATION STATUS
-  // ==============================
-  const toggleEvacuationStatus = async (id) => {
-    try {
-      const res = await axios.patch(
-        `${backendUrl}/api/v1/Evacuation/toggle/${id}`,
-        {},
+      const res = await axios.post(
+        `${backendUrl}/api/v1/Evacuation/DisplayNearbyEvacuations`,
+        { latitude, longitude, maxDistance },
         {
-          headers: { Authorization: `Bearer ${authToken}` },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
         }
       );
 
       if (res.data.status === "success") {
-        fetchEvacuation(currentPage);
-        return { success: true, data: res.data.data };
+        setNearEvacuations(res.data.data || []);
+      } else {
+        handleError(
+          new Error(res.data.message || "Failed to fetch nearby evacuations")
+        );
       }
-
-      throw new Error(res.data.message || "Failed to toggle status");
-    } catch (error) {
-      handleError(error);
-      return { success: false, error: error.message };
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ==============================
-  // GET SINGLE EVACUATION
-  // ==============================
-  const getEvacuation = async (id) => {
-    try {
-      const res = await axios.get(`${backendUrl}/api/v1/Evacuation/${id}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      fetchEvacuation(1);
+    }, 500);
 
-      return res.data.data;
-    } catch (error) {
-      handleError(error);
-      return null;
-    }
-  };
+    return () => clearTimeout(timeout);
+  }, [search, dateFrom, dateTo, fetchEvacuation]);
 
-  // ==============================
-  // EXPORT CONTEXT VALUES
-  // ==============================
   return (
     <EvacuationDisplayContext.Provider
       value={{
@@ -207,6 +158,7 @@ export const EvacuationDisplayProvider = ({ children }) => {
         currentPage,
         totalPages,
         loading,
+        error,
         search,
         setSearch,
         dateFrom,
@@ -214,11 +166,9 @@ export const EvacuationDisplayProvider = ({ children }) => {
         dateTo,
         setDateTo,
         fetchEvacuation,
+        fetchNearbyEvacuations,
+        nearEvacuations,
         AddEvacuation,
-        deleteEvacuation,
-        updateEvacuation,
-        toggleEvacuationStatus,
-        getEvacuation,
       }}
     >
       {children}

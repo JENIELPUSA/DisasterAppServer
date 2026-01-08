@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext, useMemo } from "react";
 import { Modal, SafeAreaView } from "react-native";
 import MunicipalitiesView from "./Barangay/MunicipalView";
 import BarangayView from "./Barangay/BarangayView";
 import RegisterBarangayForm from "../RegisterBarangay";
+import { MunicipalityContext } from "../../contexts/MunicipalityContext/MunicipalityContext";
 
 export default function Barangay({
   onClose,
@@ -11,68 +12,86 @@ export default function Barangay({
   barangays,
   updateBarangay,
   deleteBarangay,
-  fetchBarangays
+  fetchBarangays,
+  displayBarangaysForUser,
 }) {
-  const [municipalities, setMunicipalities] = useState([]);
+  // Kunin ang municipalities mula sa Context
+  const { municipalities } = useContext(MunicipalityContext);
+
   const [selectedMunicipality, setSelectedMunicipality] = useState(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // NEW STATE FOR REGISTERBARANGAYFORM MODAL
+  // State para sa Form Modal
   const [showRegisterForm, setShowRegisterForm] = useState(false);
   const [editingBarangay, setEditingBarangay] = useState(null);
 
-  // -------------------- MUNICIPALITY DATA WITH ALL BILIRAN MUNICIPALITIES --------------------
-  const Municipalities = [
-    { id: 1, name: "Almeria" },
-    { id: 2, name: "Biliran" },
-    { id: 3, name: "Cabucgayan" },
-    { id: 4, name: "Caibiran" },
-    { id: 5, name: "Culaba" },
-    { id: 6, name: "Kawayan" },
-    { id: 7, name: "Maripipi" },
-    { id: 8, name: "Naval (Capital)" },
-  ];
+  console.log("barangays", barangays);
 
   // -------------------- RESET FORM WHEN MODAL CLOSES --------------------
   useEffect(() => {
     if (!visible) {
       resetForm();
-    } else {
-      loadMunicipalities();
     }
   }, [visible]);
 
-  // -------------------- LOAD MUNICIPALITIES --------------------
-  const loadMunicipalities = () => {
-    setLoading(true);
-    // Simulate API loading
-    setTimeout(() => {
-      // Add total barangay count to each municipality
-      const enriched = Municipalities.map((m) => ({
-        ...m,
-        totalBarangays: barangays.filter((b) => b.municipality === m.name)
-          .length,
-      }));
+  // -------------------- PROCESS MUNICIPALITIES DATA --------------------
+  const enrichedMunicipalities = useMemo(() => {
+    if (municipalities && municipalities.length > 0) {
+      return municipalities.map((m) => {
+        // Bilangin ang barangays na kabilang sa municipality na ito
+        const municipalityBarangays = barangays.filter(
+          (b) => b.municipality?.id === m._id || b.municipality?.name === m.municipalityName
+        );
+        
+        return {
+          id: m._id,
+          name: m.municipalityName,
+          totalBarangays: municipalityBarangays.length,
+        };
+      });
+    }
+    return [];
+  }, [municipalities, barangays]);
 
-      setMunicipalities(enriched);
-      setLoading(false);
-    }, 500);
-  };
+  // -------------------- FILTER LOGIC --------------------
+  const filteredMunicipalities = enrichedMunicipalities.filter((m) =>
+    m.name?.toLowerCase().includes(search.toLowerCase())
+  );
 
-  // UPDATED onEditBarangay FUNCTION
+  const barangaysList = useMemo(() => {
+    if (!selectedMunicipality) return [];
+    
+    return barangays.filter(
+      (b) => 
+        b.municipality?.id === selectedMunicipality.id || 
+        b.municipality?.name === selectedMunicipality.name
+    );
+  }, [barangays, selectedMunicipality]);
+
+  const filteredBarangays = barangaysList.filter((b) =>
+    b.barangayName?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // -------------------- HANDLERS --------------------
   const onEditBarangay = (barangayData) => {
-    const { barangayData: barangay, municipality } = barangayData;
-    setEditingBarangay({
-      ...barangay,
-      municipality: municipality.name, // Ensure municipality name is included
-    });
-
-    // Show the RegisterBarangayForm modal
+    // Kung ang barangayData ay may nested structure
+    if (barangayData.barangayData) {
+      const { barangayData: barangay, municipality } = barangayData;
+      setEditingBarangay({
+        ...barangay,
+        municipality: municipality?.name || selectedMunicipality?.name,
+      });
+    } else {
+      // Kung direkta ang barangay object
+      setEditingBarangay({
+        ...barangayData,
+        municipality: barangayData.municipality?.name || selectedMunicipality?.name,
+      });
+    }
     setShowRegisterForm(true);
   };
 
-  // -------------------- RESET FORM --------------------
   const resetForm = () => {
     setSelectedMunicipality(null);
     setSearch("");
@@ -81,49 +100,36 @@ export default function Barangay({
     setEditingBarangay(null);
   };
 
-  // -------------------- FILTER MUNICIPALITIES BASED ON SEARCH --------------------
-  const filteredMunicipalities = municipalities.filter((m) =>
-    m.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  // -------------------- FILTER BARANGAYS BASED ON SELECTED MUNICIPALITY --------------------
-  const barangaysList = barangays.filter(
-    (b) => b.municipality === selectedMunicipality?.name
-  );
-
-  const filteredBarangays = barangaysList.filter((b) =>
-    b.barangayName.toLowerCase().includes(search.toLowerCase())
-  );
-
-  // -------------------- HANDLE CANCEL --------------------
   const handleCancel = () => {
     resetForm();
     if (onClose) onClose();
   };
 
-  // -------------------- HANDLE BACK FROM BARANGAY LIST --------------------
   const handleBack = () => {
     setSelectedMunicipality(null);
     setSearch("");
   };
 
-  // -------------------- HANDLE ADD BARANGAY --------------------
   const handleAddBarangay = () => {
     if (onAddBarangay && selectedMunicipality) {
       onAddBarangay(selectedMunicipality);
     }
   };
 
-  // -------------------- HANDLE REGISTER FORM CLOSE --------------------
   const handleRegisterFormClose = () => {
     setShowRegisterForm(false);
     setEditingBarangay(null);
   };
 
-  // -------------------- HANDLE REGISTER FORM SUBMIT --------------------
   const handleRegisterFormSubmit = async (barangayData) => {
-    await updateBarangay(barangayData.id, barangayData);
-    handleRegisterFormClose();
+    try {
+      if (barangayData.id) {
+        await updateBarangay(barangayData.id, barangayData);
+      }
+      handleRegisterFormClose();
+    } catch (error) {
+      console.error("Update failed:", error);
+    }
   };
 
   return (
@@ -134,19 +140,20 @@ export default function Barangay({
       onRequestClose={handleCancel}
     >
       <SafeAreaView className="flex-1 bg-white">
-        {/* RegisterBarangayForm Modal */}
+        {/* Register/Edit Barangay Modal */}
         <RegisterBarangayForm
           visible={showRegisterForm}
           onClose={handleRegisterFormClose}
           onSubmit={handleRegisterFormSubmit}
-          initialData={editingBarangay} // Pass the barangay data to edit
-          isEditing={!!editingBarangay} // Indicate this is an edit operation
+          initialData={editingBarangay}
+          isEditing={!!editingBarangay}
+          municipalities={municipalities}
         />
 
-        {/* Main Content */}
+        {/* Main Content Switcher */}
         {!selectedMunicipality ? (
           <MunicipalitiesView
-            municipalities={municipalities}
+            municipalities={enrichedMunicipalities}
             search={search}
             setSearch={setSearch}
             loading={loading}
@@ -154,6 +161,7 @@ export default function Barangay({
             filteredMunicipalities={filteredMunicipalities}
             handleCancel={handleCancel}
             setSelectedMunicipality={setSelectedMunicipality}
+            displayBarangaysForUser={displayBarangaysForUser}
           />
         ) : (
           <BarangayView

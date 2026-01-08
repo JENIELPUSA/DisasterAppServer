@@ -13,13 +13,14 @@ router
   .route("/:id")
   .delete(authController.protect, BarangayController.deleteBarangay)
   .patch(authController.protect, BarangayController.updateBarangay);
-router
-  .route("/BarangayDropdown")
-<<<<<<< HEAD
-  .get(BarangayController.getBarangays);
-=======
-  .get(authController.protect, BarangayController.getBarangays)
+router.route("/BarangayDropdown").get(BarangayController.getBarangays);
 
->>>>>>> 1e3b5299950291344b3d676bc472fcfe7b028a57
+router
+  .route("/displayBarangaysForUser")
+  .get(authController.protect, BarangayController.displayBarangaysForUser);
+
+router
+  .route("/dropdownbarangayformaps")
+  .get(authController.protect, BarangayController.dropdownbarangayformaps);
 
 module.exports = router;

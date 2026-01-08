@@ -37,13 +37,11 @@ export default function HouseHoldMember({
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
 
-  // Handle Edit Member
   const handleEditMember = (member) => {
     setEditingMember(member);
     setEditModalVisible(true);
   };
 
-  // Handle Save Edit from EditMemberForm
   const handleSaveEdit = (updatedMember) => {
     onEditMember(updatedMember);
     updateHouseholdMember(updatedMember._id, updatedMember);
@@ -51,7 +49,6 @@ export default function HouseHoldMember({
     setEditingMember(null);
   };
 
-  // Handle Cancel Edit
   const handleCancelEdit = () => {
     setEditModalVisible(false);
     setEditingMember(null);
@@ -74,7 +71,7 @@ export default function HouseHoldMember({
     const date = new Date(dateString);
     return date.toLocaleDateString("en-PH", {
       year: "numeric",
-      month: "long",
+      month: "short",
       day: "numeric",
     });
   };
@@ -85,7 +82,6 @@ export default function HouseHoldMember({
     const birth = new Date(birthDate);
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
-
     if (
       monthDiff < 0 ||
       (monthDiff === 0 && today.getDate() < birth.getDate())
@@ -99,6 +95,39 @@ export default function HouseHoldMember({
     return member && member.disability && member.disability.trim() !== "";
   };
 
+  // Calculate demographics statistics
+  const calculateDemographics = () => {
+    let children = 0;
+    let seniorCitizens = 0;
+    let pwd = 0;
+
+    selectedMembers.forEach((member) => {
+      const age = calculateAge(member.birthDate);
+      
+      // Count children (below 18 years old)
+      if (age < 18) {
+        children++;
+      }
+      
+      // Count senior citizens (60 years old and above)
+      if (age >= 60) {
+        seniorCitizens++;
+      }
+      
+      // Count PWD (Persons with Disabilities)
+      if (hasDisability(member)) {
+        pwd++;
+      }
+    });
+
+    return {
+      children,
+      seniorCitizens,
+      pwd,
+      total: selectedMembers.length,
+    };
+  };
+
   const generateQRCodeData = (member) => {
     const qrData = {
       memberId: member._id,
@@ -110,33 +139,13 @@ export default function HouseHoldMember({
     return JSON.stringify(qrData);
   };
 
-  const calculateDisabilityStats = () => {
-    if (!selectedMembers.length) return { count: 0, percentage: 0 };
-
-    const disabilityCount = selectedMembers.filter(
-      (member) => member && member.disability && member.disability.trim() !== ""
-    ).length;
-
-    const percentage = (disabilityCount / selectedMembers.length) * 100;
-
-    return {
-      count: disabilityCount,
-      percentage: percentage.toFixed(1),
-    };
-  };
-
   const handleToggleQRCode = (memberId) => {
-    if (expandedQRCode === memberId) {
-      setExpandedQRCode(null);
-    } else {
-      setExpandedQRCode(memberId);
-    }
+    setExpandedQRCode(expandedQRCode === memberId ? null : memberId);
   };
 
   const handleToggleMemberActive = (memberId, memberName, currentStatus) => {
     const newStatus = !currentStatus;
     const action = newStatus ? "Activate" : "Deactivate";
-
     Alert.alert(
       `${action} Member`,
       `Are you sure you want to ${action.toLowerCase()} ${memberName}?`,
@@ -172,45 +181,30 @@ export default function HouseHoldMember({
     );
   };
 
-  // Skeleton Modal Content
   const SkeletonModalContent = () => (
-    <ScrollView className="flex-1 p-5" showsVerticalScrollIndicator={false}>
-      {/* Household Lead Skeleton */}
+    <View className="flex-1 p-4">
+      {/* Header Skeleton */}
       <View className="mb-6">
         <View className="flex-row items-center justify-between mb-3">
           <View className="flex-row items-center">
             <View className="w-12 h-12 bg-gray-200 rounded-xl" />
             <View className="ml-3">
-              <View className="w-32 h-5 bg-gray-300 rounded mb-1" />
+              <View className="w-32 h-5 bg-gray-300 rounded mb-2" />
               <View className="w-24 h-3 bg-gray-200 rounded" />
             </View>
           </View>
           <View className="w-16 h-6 bg-gray-200 rounded-full" />
         </View>
 
-        <View className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-          <View className="w-40 h-5 bg-gray-300 rounded mb-3" />
-          <View className="space-y-3">
-            <View className="flex-row items-center">
-              <View className="w-4 h-4 bg-gray-200 rounded" />
-              <View className="w-48 h-3 bg-gray-200 rounded ml-3" />
-            </View>
-            <View className="flex-row items-start">
-              <View className="w-4 h-4 bg-gray-200 rounded mt-1" />
-              <View className="w-56 h-3 bg-gray-200 rounded ml-3" />
-            </View>
-            <View className="flex-row items-center">
-              <View className="w-4 h-4 bg-gray-200 rounded" />
-              <View className="w-40 h-3 bg-gray-200 rounded ml-3" />
-            </View>
-            <View className="flex-row items-center">
-              <View className="w-4 h-4 bg-gray-200 rounded" />
-              <View className="w-32 h-3 bg-gray-200 rounded ml-3" />
-            </View>
-            <View className="flex-row items-center">
-              <View className="w-4 h-4 bg-gray-200 rounded" />
-              <View className="w-48 h-3 bg-gray-200 rounded ml-3" />
-            </View>
+        <View className="bg-gray-50 rounded-lg p-4">
+          <View className="w-36 h-5 bg-gray-300 rounded mb-3" />
+          <View className="space-y-2">
+            {[1, 2, 3, 4].map((i) => (
+              <View key={i} className="flex-row items-center">
+                <View className="w-4 h-4 bg-gray-200 rounded" />
+                <View className="w-48 h-3 bg-gray-200 rounded ml-2" />
+              </View>
+            ))}
           </View>
         </View>
       </View>
@@ -221,18 +215,17 @@ export default function HouseHoldMember({
           <View className="flex-row items-center">
             <View className="w-12 h-12 bg-gray-200 rounded-xl" />
             <View className="ml-3">
-              <View className="w-40 h-5 bg-gray-300 rounded mb-1" />
+              <View className="w-40 h-5 bg-gray-300 rounded mb-2" />
               <View className="w-24 h-3 bg-gray-200 rounded" />
             </View>
           </View>
           <View className="w-20 h-6 bg-gray-200 rounded-full" />
         </View>
 
-        {/* Member Card Skeletons */}
-        {[1, 2, 3].map((item) => (
+        {[1, 2].map((item) => (
           <View
             key={item}
-            className="bg-gray-50 rounded-xl p-4 mb-3 border border-gray-200"
+            className="bg-gray-50 rounded-lg p-4 mb-3"
           >
             <View className="flex-row items-center justify-between mb-3">
               <View className="flex-row items-center flex-1">
@@ -243,36 +236,29 @@ export default function HouseHoldMember({
                 </View>
               </View>
               <View className="flex-row">
-                <View className="w-12 h-6 bg-gray-200 rounded-full mr-2" />
+                <View className="w-14 h-6 bg-gray-200 rounded-full mr-2" />
                 <View className="w-16 h-6 bg-gray-200 rounded-full" />
               </View>
             </View>
 
             <View className="space-y-2">
-              <View className="flex-row items-center">
-                <View className="w-4 h-4 bg-gray-200 rounded" />
-                <View className="w-40 h-3 bg-gray-200 rounded ml-2" />
-              </View>
-              <View className="flex-row items-center">
-                <View className="w-4 h-4 bg-gray-200 rounded" />
-                <View className="w-48 h-3 bg-gray-200 rounded ml-2" />
-              </View>
-              <View className="flex-row items-center">
-                <View className="w-4 h-4 bg-gray-200 rounded" />
-                <View className="w-56 h-3 bg-gray-200 rounded ml-2" />
-              </View>
+              {[1, 2, 3].map((line) => (
+                <View key={line} className="flex-row items-center">
+                  <View className="w-4 h-4 bg-gray-200 rounded" />
+                  <View className="w-48 h-3 bg-gray-200 rounded ml-2" />
+                </View>
+              ))}
             </View>
           </View>
         ))}
       </View>
-    </ScrollView>
+    </View>
   );
 
   const renderMemberCard = (member, index) => {
     if (!member) return null;
 
     const memberHasDisability = hasDisability(member);
-    // Gamitin ang isActive at isApproved mula sa schema
     const isActive = member.isActive !== undefined ? member.isActive : false;
     const isApproved = member.isApproved !== undefined ? member.isApproved : false;
     const isQRCodeExpanded = expandedQRCode === member._id;
@@ -283,215 +269,152 @@ export default function HouseHoldMember({
     return (
       <View
         key={member._id || `member-${index}`}
-        className={`bg-white rounded-2xl p-5 mb-4 border ${
+        className={`bg-white rounded-lg p-4 mb-3 border ${
           memberHasDisability
-            ? "border-amber-200 bg-gradient-to-br from-amber-50 to-white"
+            ? "border-amber-200"
             : "border-gray-200"
         }`}
       >
-        <View className="flex-row items-center justify-between mb-4">
+        {/* Member Header */}
+        <View className="flex-row items-center justify-between mb-3">
           <View className="flex-row items-center flex-1">
             <View
-              className={`p-3 rounded-xl ${
+              className={`p-2 rounded-lg ${
                 memberHasDisability ? "bg-amber-100" : "bg-blue-100"
               }`}
             >
               {memberHasDisability ? (
                 <MaterialCommunityIcons
                   name="account-alert"
-                  size={22}
+                  size={18}
                   color="#d97706"
                 />
               ) : (
-                <FontAwesome name="user" size={20} color="#4f46e5" />
+                <FontAwesome name="user" size={16} color="#2563eb" />
               )}
             </View>
-            <View className="ml-4 flex-1">
-              <Text className="font-bold text-gray-900 text-lg">
+            <View className="ml-3 flex-1">
+              <Text className="font-semibold text-gray-900" numberOfLines={1}>
                 {member.userId?.fullName || "Unknown Name"}
               </Text>
-              <Text className="text-gray-600 text-sm">
-                {member.relationship || "No relationship specified"}
+              <Text className="text-gray-600 text-xs mt-0.5">
+                {member.relationship || "No relationship"}
               </Text>
             </View>
           </View>
 
           {/* Status Badges */}
-          <View className="flex-row space-x-2">
+          <View className="flex-row space-x-1">
             {memberHasDisability && (
-              <View className="bg-amber-100 px-3 py-1.5 rounded-full border border-amber-200">
-                <Text className="text-amber-800 text-xs font-bold">PWD</Text>
+              <View className="bg-amber-100 px-2 py-1 rounded-full">
+                <Text className="text-amber-800 text-xs font-medium">PWD</Text>
               </View>
             )}
             {isApproved && (
-              <View className="bg-green-100 px-3 py-1.5 rounded-full border border-green-200">
-                <Text className="text-green-800 text-xs font-bold">APPROVED</Text>
+              <View className="bg-green-100 px-2 py-1 rounded-full">
+                <Text className="text-green-800 text-xs font-medium">✓</Text>
               </View>
             )}
           </View>
         </View>
 
-        <View className="space-y-3">
+        {/* Member Details */}
+        <View className="space-y-2">
           <View className="flex-row items-center">
-            <Ionicons name="call" size={16} color="#6b7280" />
-            <Text className="ml-3 text-gray-700 font-medium">
+            <Ionicons name="call" size={14} color="#6b7280" />
+            <Text className="ml-2 text-gray-700 text-sm">
               {member.userId?.contactNumber || "No contact"}
             </Text>
           </View>
 
           <View className="flex-row items-center">
-            <MaterialIcons name="cake" size={16} color="#6b7280" />
-            <Text className="ml-3 text-gray-700 font-medium">
-              {formatBirthDate(member.birthDate)} (
-              {calculateAge(member.birthDate)} years old)
-            </Text>
-          </View>
-
-          <View className="flex-row items-start">
-            <MaterialCommunityIcons
-              name="home"
-              size={16}
-              color="#6b7280"
-              style={{ marginTop: 2 }}
-            />
-            <Text className="ml-3 text-gray-600 flex-1">
-              {member.userId?.address || "No address"}
+            <MaterialIcons name="cake" size={14} color="#6b7280" />
+            <Text className="ml-2 text-gray-700 text-sm">
+              {formatBirthDate(member.birthDate)} ({calculateAge(member.birthDate)}y)
             </Text>
           </View>
 
           {memberHasDisability && (
-            <View className="bg-gradient-to-r from-amber-50 to-amber-100 p-4 rounded-xl border border-amber-200">
-              <View className="flex-row items-center">
+            <View className="bg-amber-50 p-3 rounded-lg border border-amber-200">
+              <View className="flex-row items-start">
                 <MaterialCommunityIcons
                   name="accessibility"
-                  size={20}
+                  size={16}
                   color="#92400e"
                 />
-                <View className="ml-3 flex-1">
-                  <Text className="text-amber-900 font-bold text-sm">
-                    DISABILITY ALERT
+                <View className="ml-2 flex-1">
+                  <Text className="text-amber-900 font-medium text-xs">
+                    DISABILITY
                   </Text>
-                  <Text className="text-amber-800">{member.disability}</Text>
+                  <Text className="text-amber-800 text-xs mt-0.5">
+                    {member.disability}
+                  </Text>
                 </View>
-                <MaterialCommunityIcons
-                  name="alert-circle"
-                  size={24}
-                  color="#d97706"
-                />
               </View>
             </View>
           )}
 
-          {/* Verification Code with Expandable QR Code */}
+          {/* Verification Code & QR */}
           <View className="pt-3 border-t border-gray-100">
             <TouchableOpacity
               onPress={() => handleToggleQRCode(member._id)}
-              className="flex-row items-center justify-between p-3 bg-gray-50 rounded-lg active:bg-gray-100"
+              className="flex-row items-center justify-between p-2 bg-gray-50 rounded"
               activeOpacity={0.7}
             >
               <View className="flex-row items-center">
                 <MaterialCommunityIcons
                   name={hasVerificationCode ? "qrcode" : "qrcode-remove"}
-                  size={20}
-                  color={hasVerificationCode ? "#4f46e5" : "#9ca3af"}
+                  size={16}
+                  color={hasVerificationCode ? "#2563eb" : "#9ca3af"}
                 />
-                <Text className="ml-3 text-gray-700 font-medium">
-                  Verification Code:{" "}
-                  {hasVerificationCode ? member.verificationCode : "N/A"}
+                <Text className="ml-2 text-gray-700 text-sm">
+                  Code: {hasVerificationCode ? member.verificationCode : "N/A"}
                 </Text>
               </View>
               <MaterialCommunityIcons
                 name={isQRCodeExpanded ? "chevron-up" : "chevron-down"}
-                size={24}
+                size={20}
                 color="#6b7280"
               />
             </TouchableOpacity>
 
-            {/* Expanded QR Code Section */}
+            {/* Expanded QR Code */}
             {isQRCodeExpanded && hasVerificationCode && (
-              <View className="mt-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                <View className="flex-row justify-between items-center mb-3">
-                  <Text className="text-blue-800 font-bold text-lg">
-                    QR Code
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      console.log("📱 SHARE QR CODE:");
-                      console.log("Member:", member.userId?.fullName);
-                      console.log(
-                        "Verification Code:",
-                        member.verificationCode
-                      );
-                      console.log("QR Code Data:", qrCodeData);
-                      Alert.alert(
-                        "Share QR Code",
-                        "QR code data copied to console"
-                      );
-                    }}
-                    className="p-2 bg-white rounded-lg border border-blue-200"
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="share-outline" size={18} color="#4f46e5" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* REAL QR Code Display */}
-                <View className="items-center mb-3">
-                  <View className="bg-white p-4 rounded-lg border border-gray-300">
+              <View className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <View className="items-center mb-2">
+                  <View className="bg-white p-3 rounded border border-gray-300">
                     <QRCode
                       value={qrCodeData}
-                      size={150}
+                      size={120}
                       color="black"
                       backgroundColor="white"
-                      logoSize={30}
-                      logoMargin={2}
-                      logoBorderRadius={15}
-                      quietZone={10}
                     />
                   </View>
-                  <Text className="text-gray-600 text-sm mt-2">
-                    Scan this QR code for verification
+                  <Text className="text-gray-600 text-xs mt-2">
+                    Scan for verification
                   </Text>
                 </View>
 
-                <View className="bg-white p-3 rounded-lg border border-blue-100">
-                  <Text className="text-center text-gray-800 font-medium">
-                    Code:{" "}
-                    <Text className="font-mono font-bold">
-                      {member.verificationCode}
-                    </Text>
-                  </Text>
-                  <Text className="text-center text-gray-500 text-xs mt-1">
-                    Member ID: {member._id?.substring(0, 8) || "N/A"}
+                <View className="bg-white p-2 rounded border border-blue-100">
+                  <Text className="text-center text-gray-800 font-medium text-sm">
+                    <Text className="font-mono">{member.verificationCode}</Text>
                   </Text>
                 </View>
               </View>
             )}
-
-            {/* Join Date */}
-            <View className="flex-row items-center mt-3">
-              <Ionicons name="calendar" size={16} color="#6b7280" />
-              <Text className="ml-2 text-gray-600 text-sm">
-                Joined: {formatDate(member.createdAt)}
-              </Text>
-            </View>
           </View>
 
-          {/* Action Buttons for Member */}
-          <View className="flex-row space-x-2 mt-4">
-            {/* Edit Button */}
+          {/* Action Buttons */}
+          <View className="flex-row space-x-2 mt-3">
             <TouchableOpacity
               onPress={() => handleEditMember(member)}
-              className="flex-1 bg-blue-100 rounded-xl p-3 flex-row items-center justify-center border border-blue-200 active:bg-blue-200"
+              className="flex-1 bg-blue-50 rounded p-2.5 flex-row items-center justify-center border border-blue-200"
               activeOpacity={0.7}
             >
-              <Ionicons name="pencil" size={16} color="#2563eb" />
-              <Text className="text-blue-700 font-semibold ml-2 text-sm">
-                Edit
-              </Text>
+              <Ionicons name="pencil" size={13} color="#2563eb" />
+              <Text className="text-blue-700 font-medium ml-1.5 text-xs">Edit</Text>
             </TouchableOpacity>
 
-            {/* Toggle Active Status Button */}
             <TouchableOpacity
               onPress={() =>
                 handleToggleMemberActive(
@@ -500,20 +423,20 @@ export default function HouseHoldMember({
                   isActive
                 )
               }
-              className={`flex-1 rounded-xl p-3 flex-row items-center justify-center border ${
+              className={`flex-1 rounded p-2.5 flex-row items-center justify-center border ${
                 isActive
-                  ? "bg-green-100 border-green-200 active:bg-green-200"
-                  : "bg-gray-100 border-gray-200 active:bg-gray-200"
+                  ? "bg-green-50 border-green-200"
+                  : "bg-gray-100 border-gray-200"
               }`}
               activeOpacity={0.7}
             >
               {isActive ? (
-                <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                <Ionicons name="checkmark-circle" size={13} color="#059669" />
               ) : (
-                <Ionicons name="close-circle" size={16} color="#6b7280" />
+                <Ionicons name="close-circle" size={13} color="#6b7280" />
               )}
               <Text
-                className={`font-semibold ml-2 text-sm ${
+                className={`font-medium ml-1.5 text-xs ${
                   isActive ? "text-green-700" : "text-gray-700"
                 }`}
               >
@@ -521,7 +444,6 @@ export default function HouseHoldMember({
               </Text>
             </TouchableOpacity>
 
-            {/* Toggle Approved Status Button - Ipakita lamang kung hindi pa approved */}
             {!isApproved && (
               <TouchableOpacity
                 onPress={() =>
@@ -531,13 +453,11 @@ export default function HouseHoldMember({
                     isApproved
                   )
                 }
-                className="flex-1 rounded-xl p-3 flex-row items-center justify-center border bg-amber-100 border-amber-200 active:bg-amber-200"
+                className="flex-1 rounded p-2.5 flex-row items-center justify-center border bg-amber-50 border-amber-200"
                 activeOpacity={0.7}
               >
-                <Ionicons name="time" size={16} color="#d97706" />
-                <Text className="font-semibold ml-2 text-sm text-amber-700">
-                  Pending
-                </Text>
+                <Ionicons name="time" size={13} color="#d97706" />
+                <Text className="font-medium ml-1.5 text-xs text-amber-700">Pending</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -556,56 +476,51 @@ export default function HouseHoldMember({
         statusBarTranslucent={false}
       >
         <SafeAreaView className="flex-1 bg-white">
-          {/* Modern Modal Header */}
+          {/* Header */}
           <View
-            className={`pb-6 px-6 ${
+            className={`pb-4 px-4 ${
               hasDisabilityWarning
-                ? "bg-gradient-to-r from-amber-500 to-amber-600"
-                : "bg-gradient-to-r from-blue-600 to-indigo-700"
+                ? "bg-amber-600"
+                : "bg-cyan-600"
             }`}
             style={{
               paddingTop:
-                Platform.OS === "android" ? StatusBar.currentHeight + 20 : 20,
+                Platform.OS === "android" ? StatusBar.currentHeight + 12 : 12,
             }}
           >
-            <View className="flex-row items-center justify-between mb-5">
+            <View className="flex-row items-center justify-between mb-3">
               <TouchableOpacity
                 onPress={onCloseModal}
-                className="p-3 bg-white/20 rounded-xl"
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                className="p-2 bg-white/20 rounded-lg"
                 activeOpacity={0.7}
               >
-                <Ionicons name="arrow-back" size={24} color="white" />
+                <Ionicons name="arrow-back" size={20} color="white" />
               </TouchableOpacity>
-              <View className="flex-1 ml-4">
-                <Text className="text-white text-2xl font-bold text-center">
+              <View className="flex-1 ml-3">
+                <Text className="text-white font-semibold text-lg text-center">
                   Household Details
                 </Text>
                 {selectedHousehold && (
-                  <Text className="text-white/90 text-center mt-2 font-medium">
-                    {selectedHousehold.householdCode}
+                  <Text className="text-white/90 text-center text-sm">
+                    HH-{selectedHousehold.householdCode}
                   </Text>
                 )}
               </View>
-              <View className="w-12" />
+              <View className="w-8" />
             </View>
 
-            {/* Disability Warning Banner */}
             {hasDisabilityWarning && (
-              <View className="bg-white/25 p-4 rounded-2xl">
+              <View className="bg-white/20 p-3 rounded-lg">
                 <View className="flex-row items-center">
                   <MaterialCommunityIcons
                     name="alert-circle"
-                    size={24}
+                    size={18}
                     color="white"
                   />
-                  <View className="ml-4 flex-1">
-                    <Text className="text-white font-bold text-lg">
-                      DISABILITY ALERT
-                    </Text>
-                    <Text className="text-white/90 mt-1">
-                      This household has members with disabilities requiring
-                      special attention
+                  <View className="ml-2 flex-1">
+                    <Text className="text-white font-medium text-sm">DISABILITY ALERT</Text>
+                    <Text className="text-white/90 text-xs mt-0.5">
+                      Contains members with disabilities
                     </Text>
                   </View>
                 </View>
@@ -613,72 +528,64 @@ export default function HouseHoldMember({
             )}
           </View>
 
-          {/* Show skeleton loading for members */}
+          {/* Content */}
           {membersLoading ? (
             <SkeletonModalContent />
           ) : (
             <ScrollView
               className="flex-1 bg-gray-50"
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 120 }}
+              contentContainerStyle={{ paddingBottom: 80 }}
             >
-              <View className="p-6">
+              <View className="p-4">
                 {selectedHousehold && (
                   <>
-                    {/* Household Lead Section */}
-                    <View className="mb-8">
-                      <View className="flex-row items-center justify-between mb-4">
+                    {/* Household Lead */}
+                    <View className="mb-6">
+                      <View className="flex-row items-center justify-between mb-3">
                         <View className="flex-row items-center">
-                          <View className="bg-gradient-to-br from-blue-100 to-white p-4 rounded-2xl border border-blue-200">
+                          <View className="bg-blue-100 p-3 rounded-lg">
                             <MaterialCommunityIcons
                               name="account-tie"
-                              size={28}
-                              color="#4f46e5"
+                              size={20}
+                              color="#2563eb"
                             />
                           </View>
-                          <View className="ml-4">
-                            <Text className="text-gray-900 font-bold text-xl">
+                          <View className="ml-3">
+                            <Text className="text-gray-900 font-semibold">
                               Household Lead
                             </Text>
-                            <Text className="text-gray-600">
-                              Primary contact person
+                            <Text className="text-gray-600 text-xs">
+                              Primary contact
                             </Text>
                           </View>
                         </View>
 
-                        {/* Disability Summary */}
-                        {selectedMembers.length > 0 &&
-                          calculateDisabilityStats().count > 0 && (
-                            <View className="bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2.5 rounded-full">
-                              <Text className="text-white font-bold">
-                                PWD: {calculateDisabilityStats().count}
-                              </Text>
-                            </View>
-                          )}
+                        {selectedMembers.length > 0 && (
+                          <View className="bg-cyan-600 px-2.5 py-1 rounded-full">
+                            <Text className="text-white font-medium text-xs">
+                              {selectedMembers.length} Members
+                            </Text>
+                          </View>
+                        )}
                       </View>
 
-                      <View className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-                        <Text className="font-bold text-gray-900 text-xl mb-4">
+                      <View className="bg-white rounded-lg p-4 border border-gray-200">
+                        <Text className="font-semibold text-gray-900 text-base mb-3">
                           {selectedHousehold.fullName}
                         </Text>
 
-                        <View className="space-y-4">
+                        <View className="space-y-2">
                           <View className="flex-row items-center">
-                            <Ionicons name="call" size={20} color="#6b7280" />
-                            <Text className="ml-4 text-gray-700 font-medium text-lg">
-                              {selectedHousehold.contactNumber ||
-                                "No contact number"}
+                            <Ionicons name="call" size={16} color="#6b7280" />
+                            <Text className="ml-2 text-gray-700 text-sm">
+                              {selectedHousehold.contactNumber || "No contact"}
                             </Text>
                           </View>
 
                           <View className="flex-row items-start">
-                            <Ionicons
-                              name="location"
-                              size={20}
-                              color="#6b7280"
-                              style={{ marginTop: 2 }}
-                            />
-                            <Text className="ml-4 text-gray-600 flex-1 text-lg">
+                            <Ionicons name="location" size={16} color="#6b7280" style={{ marginTop: 2 }} />
+                            <Text className="ml-2 text-gray-600 text-sm flex-1">
                               {selectedHousehold.address || "No address"}
                             </Text>
                           </View>
@@ -686,133 +593,139 @@ export default function HouseHoldMember({
                           <View className="flex-row items-center">
                             <MaterialCommunityIcons
                               name="map-marker-radius"
-                              size={20}
+                              size={16}
                               color="#6b7280"
                             />
-                            <Text className="ml-4 text-gray-700 font-medium text-lg">
-                              Barangay {selectedHousehold.barangay || "Unknown"}
+                            <Text className="ml-2 text-gray-700 text-sm">
+                              Brgy. {selectedHousehold.barangay || "Unknown"}
                             </Text>
                           </View>
 
                           <View className="flex-row items-center">
                             <MaterialCommunityIcons
                               name="home-group"
-                              size={20}
+                              size={16}
                               color="#6b7280"
                             />
-                            <Text className="ml-4 text-gray-700 font-medium text-lg">
-                              Family Size:{" "}
-                              {selectedHousehold.familyMembers || 0} members
-                            </Text>
-                          </View>
-
-                          <View className="flex-row items-center">
-                            <Ionicons
-                              name="calendar"
-                              size={20}
-                              color="#6b7280"
-                            />
-                            <Text className="ml-4 text-gray-700 font-medium text-lg">
-                              Registered:{" "}
-                              {formatDate(selectedHousehold.createdAt)}
+                            <Text className="ml-2 text-gray-700 text-sm">
+                              Family: {selectedHousehold.familyMembers || 0} members
                             </Text>
                           </View>
                         </View>
                       </View>
                     </View>
 
-                    {/* Disability Statistics Card */}
-                    {hasDisabilityWarning && (
-                      <View className="mb-8">
-                        <View className="bg-gradient-to-r from-amber-50 to-amber-100 rounded-2xl p-6 border border-amber-300">
-                          <View className="flex-row items-center justify-between mb-6">
-                            <View className="flex-row items-center">
-                              <MaterialCommunityIcons
-                                name="accessibility"
-                                size={28}
-                                color="#d97706"
-                              />
-                              <Text className="ml-4 text-amber-900 font-bold text-xl">
-                                Disability Report
+                    {/* Demographics Statistics */}
+                    {selectedMembers.length > 0 && (
+                      <View className="mb-6">
+                        <View className="flex-row items-center mb-3">
+                          <View className="bg-purple-100 p-3 rounded-lg">
+                            <MaterialCommunityIcons
+                              name="chart-bar"
+                              size={20}
+                              color="#7c3aed"
+                            />
+                          </View>
+                          <View className="ml-3">
+                            <Text className="text-gray-900 font-semibold">
+                              Demographics
+                            </Text>
+                            <Text className="text-gray-600 text-xs">
+                              Age and disability breakdown
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View className="bg-white rounded-lg p-4 border border-gray-200">
+                          <View className="flex-row justify-between mb-2">
+                            <View className="items-center flex-1">
+                              <Text className="text-gray-900 font-bold text-2xl">
+                                {calculateDemographics().total}
+                              </Text>
+                              <Text className="text-gray-600 text-xs mt-1">
+                                Total Members
                               </Text>
                             </View>
-                            <View className="bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-2.5 rounded-full">
-                              <Text className="text-white font-bold text-lg">
-                                {calculateDisabilityStats().count} PWD
+                            <View className="items-center flex-1">
+                              <Text className="text-blue-600 font-bold text-2xl">
+                                {calculateDemographics().children}
+                              </Text>
+                              <Text className="text-gray-600 text-xs mt-1">
+                                Children (&lt;18)
+                              </Text>
+                            </View>
+                            <View className="items-center flex-1">
+                              <Text className="text-orange-600 font-bold text-2xl">
+                                {calculateDemographics().seniorCitizens}
+                              </Text>
+                              <Text className="text-gray-600 text-xs mt-1">
+                                Seniors (60+)
                               </Text>
                             </View>
                           </View>
-
-                          <Text className="text-amber-800 text-lg mb-4 font-medium">
-                            {calculateDisabilityStats().count} out of{" "}
-                            {selectedMembers.length} members have disabilities (
-                            {calculateDisabilityStats().percentage}%)
-                          </Text>
-
-                          <View className="bg-white p-5 rounded-xl border border-amber-300">
-                            <Text className="text-amber-900 font-bold text-lg mb-3">
-                              Special Considerations Needed:
-                            </Text>
-                            <View className="space-y-2">
-                              <View className="flex-row items-center">
-                                <Ionicons
-                                  name="checkmark-circle"
-                                  size={20}
-                                  color="#d97706"
-                                />
-                                <Text className="ml-3 text-amber-800">
-                                  Accessibility modifications
-                                </Text>
-                              </View>
-                              <View className="flex-row items-center">
-                                <Ionicons
-                                  name="checkmark-circle"
-                                  size={20}
-                                  color="#d97706"
-                                />
-                                <Text className="ml-3 text-amber-800">
-                                  Priority government assistance
-                                </Text>
-                              </View>
-                              <View className="flex-row items-center">
-                                <Ionicons
-                                  name="checkmark-circle"
-                                  size={20}
-                                  color="#d97706"
-                                />
-                                <Text className="ml-3 text-amber-800">
-                                  Regular health monitoring
-                                </Text>
-                              </View>
+                          
+                          <View className="mt-4 pt-4 border-t border-gray-100">
+                            <View className="items-center">
+                              <Text className="text-amber-700 font-bold text-2xl">
+                                {calculateDemographics().pwd}
+                              </Text>
+                              <Text className="text-gray-600 text-xs mt-1">
+                                Persons with Disabilities
+                              </Text>
                             </View>
                           </View>
                         </View>
                       </View>
                     )}
 
-                    {/* Members Section */}
-                    <View className="mb-8">
-                      <View className="flex-row items-center justify-between mb-6">
-                        <View className="flex-row items-center">
-                          <View className="bg-gradient-to-br from-green-100 to-white p-4 rounded-2xl border border-green-200">
-                            <FontAwesome
-                              name="users"
-                              size={24}
-                              color="#059669"
-                            />
+                    {/* Disability Statistics */}
+                    {hasDisabilityWarning && (
+                      <View className="mb-6">
+                        <View className="bg-amber-50 rounded-lg p-4 border border-amber-300">
+                          <View className="flex-row items-center justify-between mb-3">
+                            <View className="flex-row items-center">
+                              <MaterialCommunityIcons
+                                name="accessibility"
+                                size={20}
+                                color="#d97706"
+                              />
+                              <Text className="ml-2 text-amber-900 font-semibold text-sm">
+                                Disability Report
+                              </Text>
+                            </View>
+                            <View className="bg-amber-500 px-3 py-1 rounded-full">
+                              <Text className="text-white font-medium text-xs">
+                                {calculateDemographics().pwd} PWD
+                              </Text>
+                            </View>
                           </View>
-                          <View className="ml-4">
-                            <Text className="text-gray-900 font-bold text-xl">
+
+                          <Text className="text-amber-800 text-sm mb-3">
+                            {calculateDemographics().pwd} of {selectedMembers.length} members
+                            ({((calculateDemographics().pwd / selectedMembers.length) * 100).toFixed(1)}%)
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Members Section */}
+                    <View className="mb-6">
+                      <View className="flex-row items-center justify-between mb-3">
+                        <View className="flex-row items-center">
+                          <View className="bg-green-100 p-3 rounded-lg">
+                            <FontAwesome name="users" size={18} color="#059669" />
+                          </View>
+                          <View className="ml-3">
+                            <Text className="text-gray-900 font-semibold">
                               Household Members
                             </Text>
-                            <Text className="text-gray-600">
-                              {selectedMembers.length} registered member
-                              {selectedMembers.length !== 1 ? "s" : ""}
+                            <Text className="text-gray-600 text-xs">
+                              {selectedMembers.length} registered
                             </Text>
                           </View>
                         </View>
-                        <View className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 rounded-full">
-                          <Text className="text-white font-bold text-lg">
+                        <View className="bg-cyan-600 px-3 py-1 rounded-full">
+                          <Text className="text-white font-medium text-xs">
                             TOTAL: {selectedMembers.length}
                           </Text>
                         </View>
@@ -823,47 +736,45 @@ export default function HouseHoldMember({
                           renderMemberCard(member, index)
                         )
                       ) : (
-                        <View className="bg-gradient-to-br from-gray-50 to-white rounded-2xl p-10 items-center justify-center border border-gray-200">
+                        <View className="bg-gray-50 rounded-lg p-8 items-center justify-center border border-gray-200">
                           <MaterialCommunityIcons
                             name="account-group-outline"
-                            size={64}
+                            size={36}
                             color="#9ca3af"
                           />
-                          <Text className="text-gray-600 font-bold text-xl mt-6">
-                            No members registered yet
+                          <Text className="text-gray-600 font-medium mt-3">
+                            No members registered
                           </Text>
                         </View>
                       )}
                     </View>
 
-                    {/* Household Status Section */}
-                    <View className="mb-8">
-                      <View className="flex-row items-center mb-4">
-                        <View className="bg-gradient-to-br from-amber-100 to-white p-4 rounded-2xl border border-amber-200">
+                    {/* Household Status */}
+                    <View className="mb-6">
+                      <View className="flex-row items-center mb-3">
+                        <View className="bg-amber-100 p-3 rounded-lg">
                           <MaterialCommunityIcons
                             name="clipboard-check"
-                            size={24}
+                            size={18}
                             color="#d97706"
                           />
                         </View>
-                        <View className="ml-4">
-                          <Text className="text-gray-900 font-bold text-xl">
+                        <View className="ml-3">
+                          <Text className="text-gray-900 font-semibold">
                             Household Status
                           </Text>
-                          <Text className="text-gray-600">
-                            Current registration details
+                          <Text className="text-gray-600 text-xs">
+                            Registration details
                           </Text>
                         </View>
                       </View>
 
-                      <View className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-                        <View className="flex-row justify-between items-center mb-6">
+                      <View className="bg-white rounded-lg p-4 border border-gray-200">
+                        <View className="flex-row justify-between items-center mb-4">
                           <View>
-                            <Text className="text-gray-600 text-sm">
-                              Status
-                            </Text>
+                            <Text className="text-gray-600 text-xs">Status</Text>
                             <Text
-                              className={`text-2xl font-bold ${
+                              className={`font-semibold mt-1 ${
                                 selectedHousehold.status === "active"
                                   ? "text-green-600"
                                   : "text-gray-600"
@@ -875,17 +786,13 @@ export default function HouseHoldMember({
                             </Text>
                           </View>
                           <View>
-                            <Text className="text-gray-600 text-sm">
-                              Capacity
-                            </Text>
-                            <Text className="text-2xl font-bold text-gray-900">
-                              {selectedMembers.length}/
-                              {selectedHousehold.familyMembers || 0}
+                            <Text className="text-gray-600 text-xs">Capacity</Text>
+                            <Text className="font-semibold text-gray-900 mt-1">
+                              {selectedMembers.length}/{selectedHousehold.familyMembers || 0}
                             </Text>
                           </View>
                         </View>
 
-                        {/* Professional Status Toggle Button */}
                         <TouchableOpacity
                           onPress={() => {
                             onToggleStatus(
@@ -895,24 +802,20 @@ export default function HouseHoldMember({
                             );
                             onCloseModal();
                           }}
-                          className={`rounded-xl p-5 flex-row items-center justify-center ${
+                          className={`rounded p-3.5 flex-row items-center justify-center ${
                             selectedHousehold.status === "active"
-                              ? "bg-gradient-to-r from-amber-50 to-amber-100 border border-amber-300"
-                              : "bg-gradient-to-r from-green-50 to-green-100 border border-green-300"
+                              ? "bg-amber-50 border border-amber-300"
+                              : "bg-green-50 border border-green-300"
                           }`}
                           activeOpacity={0.8}
                         >
                           {selectedHousehold.status === "active" ? (
-                            <Ionicons name="power" size={24} color="#d97706" />
+                            <Ionicons name="power" size={18} color="#d97706" />
                           ) : (
-                            <Ionicons
-                              name="power-outline"
-                              size={24}
-                              color="#059669"
-                            />
+                            <Ionicons name="power-outline" size={18} color="#059669" />
                           )}
                           <Text
-                            className={`ml-3 font-bold text-xl ${
+                            className={`ml-2 font-medium ${
                               selectedHousehold.status === "active"
                                 ? "text-amber-700"
                                 : "text-green-700"
@@ -933,7 +836,6 @@ export default function HouseHoldMember({
         </SafeAreaView>
       </Modal>
 
-      {/* Use the separated EditMemberForm component */}
       <EditMemberForm
         visible={editModalVisible}
         member={editingMember}

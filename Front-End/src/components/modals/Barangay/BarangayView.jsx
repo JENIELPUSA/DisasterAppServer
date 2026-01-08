@@ -12,6 +12,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { EvacuationDisplayContext } from "../../../contexts/EvacuationContext/EvacuationContext";
 import { HouseholdContext } from "../../../contexts/HouseholdLeadContext/HouseholdContext";
 import { HouseHoldMemberContext } from "../../../contexts/HouseHoldMemberContext/HouseHoldMemberContext";
+import { MunicipalityContext } from "../../../contexts/MunicipalityContext/MunicipalityContext";
 import EvacuationForm from "./EvacuationForm";
 import EvacuationMapView from "./EvacuationMapView";
 import EvacuationListView from "./EvacuationListView";
@@ -39,8 +40,9 @@ const BarangayView = ({
     householdMembers,
     loading,
     setLoading,
-    updateHouseholdMemberStatus
+    updateHouseholdMemberStatus,
   } = useContext(HouseHoldMemberContext);
+  const { municipalities } = useContext(MunicipalityContext);
   const { AddEvacuation, evacuations, updateEvacuation, deleteEvacuation } =
     useContext(EvacuationDisplayContext);
   const { fetchHouseholdLeads, householdLeads } = useContext(HouseholdContext);
@@ -59,6 +61,29 @@ const BarangayView = ({
   // Local state para sa search
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Helper functions for safe access
+  const getEvacuationBarangayName = (evac) => {
+    return evac.barangay ? evac.barangay.barangayName : null;
+  };
+
+  const getEvacuationMunicipality = (evac) => {
+    return evac.barangay ? evac.barangay.municipality : null;
+  };
+
+  // Function to get municipality ID by name
+  const getMunicipalityIdByName = (municipalityName) => {
+    const municipality = municipalities.find(mun => mun.municipalityName === municipalityName);
+    return municipality ? municipality._id : null;
+  };
+
+  // Function to get municipality name by ID
+  const getMunicipalityNameById = (municipalityId) => {
+    const municipality = municipalities.find(mun => mun._id === municipalityId);
+    return municipality ? municipality.municipalityName : null;
+  };
+
+  console.log("selectedMunicipality",selectedMunicipality)
 
   // Debounce effect para sa search
   useEffect(() => {
@@ -80,6 +105,7 @@ const BarangayView = ({
 
     fetchData();
   }, [debouncedSearch, selectedMunicipality, fetchBarangays]);
+
 
   const getDisplayBarangayName = (barangay) => {
     if (barangay.barangayName && barangay.barangayName.trim() !== "") {
@@ -117,28 +143,32 @@ const BarangayView = ({
     }
   };
 
+  console.log("barangaysList",barangaysList)
+
   const processEvacuationData = (rawEvacuations) => {
-    return rawEvacuations.map((evac) => {
-      const currentEvacuation = evac.totalHouseholds || 0;
-      const evacuationCapacity = evac.evacuationCapacity || 0;
-      const percentage =
-        evacuationCapacity > 0
-          ? (currentEvacuation / evacuationCapacity) * 100
-          : 0;
-      const availableCapacity = Math.max(
-        evacuationCapacity - currentEvacuation,
-        0
-      );
-      const status = getEvacuationStatus(currentEvacuation, evacuationCapacity);
-      return {
-        ...evac,
-        currentEvacuation,
-        evacuationPercentage: percentage,
-        availableCapacity,
-        status,
-        statusColor: getStatusColor(status),
-      };
-    });
+    return rawEvacuations
+      .filter(evac => evac.barangay) // Filter out evacuations without barangay
+      .map((evac) => {
+        const currentEvacuation = evac.totalHouseholds || 0;
+        const evacuationCapacity = evac.evacuationCapacity || 0;
+        const percentage =
+          evacuationCapacity > 0
+            ? (currentEvacuation / evacuationCapacity) * 100
+            : 0;
+        const availableCapacity = Math.max(
+          evacuationCapacity - currentEvacuation,
+          0
+        );
+        const status = getEvacuationStatus(currentEvacuation, evacuationCapacity);
+        return {
+          ...evac,
+          currentEvacuation,
+          evacuationPercentage: percentage,
+          availableCapacity,
+          status,
+          statusColor: getStatusColor(status),
+        };
+      });
   };
 
   const handleEvacuationSubmit = async (formData) => {
@@ -148,17 +178,18 @@ const BarangayView = ({
         const updatedEvacuation = {
           ...formData,
           barangay: selectedBarangay,
+          municipality: selectedMunicipality._id, // Pass municipality ID instead of name
           updatedAt: new Date().toISOString(),
-          // Preserve the original createdAt for updates
           createdAt: editingEvacuation.createdAt || new Date().toISOString(),
         };
-        await updateEvacuation(updatedEvacuation._id, updatedEvacuation); // Assume you have this function
+        await updateEvacuation(updatedEvacuation._id, updatedEvacuation);
         Alert.alert("Success", "Evacuation center updated successfully!");
       } else {
         // ADD NEW EVACUATION
         const newEvacuation = {
           ...formData,
           barangay: selectedBarangay,
+          municipality: selectedMunicipality._id, // Pass municipality ID instead of name
           isActive: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -179,13 +210,14 @@ const BarangayView = ({
       );
     }
   };
+
   const handleEditEvacuation = (evacuation) => {
     console.log("evacuation", evacuation);
     setEditingEvacuation(evacuation);
     setShowAddEvacuationForm(true);
   };
+
   const handleDeleteEvacuation = (evacuation) => {
-    // Show confirmation alert first
     Alert.alert(
       "Delete Evacuation Center",
       `Are you sure you want to delete ${evacuation.evacuationName}?`,
@@ -248,7 +280,7 @@ const BarangayView = ({
       setMenuVisible(false);
       onEditBarangay({
         barangayData: selectedBarangay,
-        municipality: selectedMunicipality,
+        municipality: selectedMunicipality, // Pass municipality object with ID
       });
     }
   };
@@ -279,7 +311,7 @@ const BarangayView = ({
                 typeof fetchBarangays === "function"
               ) {
                 await fetchBarangays({
-                  municipality: selectedMunicipality.name,
+                  municipality: selectedMunicipality._id, // Pass ID instead of name
                   search: debouncedSearch,
                 });
               }
@@ -301,10 +333,13 @@ const BarangayView = ({
     setMenuVisible(false);
 
     try {
-      await fetchHouseholdLeads({ selectedBarangayId: selectedBarangay._id });
+      // Pass municipality ID instead of name
+      await fetchHouseholdLeads({ 
+        selectedBarangayId: selectedBarangay._id,
+        municipalityId: selectedMunicipality._id 
+      });
     } catch (error) {
       console.error("Error fetching household leads:", error);
-      // We can show an alert but still proceed.
       Alert.alert("Warning", "Household data might not be up to date.");
     }
 
@@ -321,8 +356,11 @@ const BarangayView = ({
       if (onViewEvacuation) {
         onViewEvacuation(selectedBarangay);
       } else {
+        // Compare municipality by ID instead of name
         const barangayEvacuations = evacuations.filter(
-          (evac) => evac.barangay.barangayName === selectedBarangay.barangayName
+          (evac) => evac.barangay && 
+          evac.barangay.municipality === selectedMunicipality._id && // Compare by ID
+          evac.barangay.barangayName === selectedBarangay.barangayName
         );
         const processedEvacuations = processEvacuationData(barangayEvacuations);
         setEvacuationData(processedEvacuations);
@@ -331,64 +369,66 @@ const BarangayView = ({
     }
   };
 
-  const renderBarangayCard = ({ item }) => (
-    <View className="p-5 bg-white border border-gray-100 rounded-xl mb-3 shadow-sm">
-      <View className="flex-row items-start justify-between mb-2">
-        <View className="flex-1">
-          <View className="flex-row items-center mb-2">
-            <View className="w-8 h-8 rounded-full bg-green-100 items-center justify-center mr-3">
-              <MaterialIcons name="place" size={18} color="#059669" />
+  const renderBarangayCard = ({ item }) => {
+    // Compare municipality by ID instead of name
+    const barangayEvacuationCount = evacuations.filter(
+      (evac) => evac.barangay && 
+      evac.barangay.municipality === selectedMunicipality._id && // Compare by ID
+      evac.barangay.barangayName === item.barangayName
+    ).length;
+
+    return (
+      <View className="p-5 bg-white border border-gray-100 rounded-xl mb-3 shadow-sm">
+        <View className="flex-row items-start justify-between mb-2">
+          <View className="flex-1">
+            <View className="flex-row items-center mb-2">
+              <View className="w-8 h-8 rounded-full bg-green-100 items-center justify-center mr-3">
+                <MaterialIcons name="place" size={18} color="#059669" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-lg font-semibold text-gray-800">
+                  {getDisplayBarangayName(item)}
+                </Text>
+                {item.isCapital && (
+                  <View className="bg-yellow-100 px-2 py-1 rounded-full self-start mt-1">
+                    <Text className="text-yellow-800 text-xs font-medium">
+                      Municipal Capital
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-            <View className="flex-1">
-              <Text className="text-lg font-semibold text-gray-800">
-                {getDisplayBarangayName(item)}
-              </Text>
-              {item.isCapital && (
-                <View className="bg-yellow-100 px-2 py-1 rounded-full self-start mt-1">
-                  <Text className="text-yellow-800 text-xs font-medium">
-                    Municipal Capital
-                  </Text>
-                </View>
-              )}
-            </View>
+            <Text className="text-sm text-gray-500 ml-11">
+              {item.fullAddress ||
+                `${getDisplayBarangayName(item)}, ${
+                  selectedMunicipality.name
+                }, Biliran, Philippines`}
+            </Text>
           </View>
-          <Text className="text-sm text-gray-500 ml-11">
-            {item.fullAddress ||
-              `${getDisplayBarangayName(item)}, ${
-                selectedMunicipality.name
-              }, Biliran, Philippines`}
-          </Text>
+          <TouchableOpacity className="p-2" onPress={() => openMenu(item)}>
+            <MaterialIcons name="more-vert" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity className="p-2" onPress={() => openMenu(item)}>
-          <MaterialIcons name="more-vert" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-      </View>
-      <View className="ml-11 mt-3 flex-row items-center">
-        <View className="flex-row items-center mr-4">
-          <MaterialIcons name="calendar-today" size={14} color="#6B7280" />
-          <Text className="text-gray-500 text-xs ml-1">
-            Added:{" "}
-            {item.createdAt
-              ? new Date(item.createdAt).toLocaleDateString()
-              : "Unknown date"}
-          </Text>
+        <View className="ml-11 mt-3 flex-row items-center">
+          <View className="flex-row items-center mr-4">
+            <MaterialIcons name="calendar-today" size={14} color="#6B7280" />
+            <Text className="text-gray-500 text-xs ml-1">
+              Added:{" "}
+              {item.createdAt
+                ? new Date(item.createdAt).toLocaleDateString()
+                : "Unknown date"}
+            </Text>
+          </View>
+          <View className="flex-row items-center">
+            <MaterialIcons name="safety-divider" size={14} color="#6B7280" />
+            <Text className="text-gray-500 text-xs ml-1">
+              {barangayEvacuationCount} evacuation centers
+            </Text>
+          </View>
         </View>
-        {(() => {
-          const barangayEvacuationCount = evacuations.filter(
-            (evac) => evac.barangay.barangayName === item.barangayName
-          ).length;
-          return (
-            <View className="flex-row items-center">
-              <MaterialIcons name="safety-divider" size={14} color="#6B7280" />
-              <Text className="text-gray-500 text-xs ml-1">
-                {barangayEvacuationCount} evacuation centers
-              </Text>
-            </View>
-          );
-        })()}
       </View>
-    </View>
-  );
+    );
+  };
 
   if (!selectedMunicipality) {
     return (
@@ -474,6 +514,7 @@ const BarangayView = ({
           initialData={editingEvacuation}
           onMapSelect={() => setShowAddLocationMap(true)}
           editingEvacuation={editingEvacuation}
+          municipalities={municipalities}
         />
         <EvacuationMapView
           visible={showMapView}
@@ -497,6 +538,12 @@ const BarangayView = ({
       </>
     );
   }
+
+  // Compare municipality by ID instead of name
+  const municipalityEvacuationCount = evacuations.filter(
+    (evac) => evac.barangay && 
+    evac.barangay.municipality === selectedMunicipality._id // Compare by ID
+  ).length;
 
   return (
     <>
@@ -576,7 +623,7 @@ const BarangayView = ({
       </View>
 
       <FlatList
-        data={barangaysList || []} // Gamitin ang barangaysList (from back-end)
+        data={barangaysList || []}
         showsVerticalScrollIndicator={false}
         keyExtractor={(item) => item._id || item.id || Math.random().toString()}
         renderItem={renderBarangayCard}
@@ -603,14 +650,7 @@ const BarangayView = ({
                     color="#6B7280"
                   />
                   <Text className="text-gray-600 text-xs ml-1">
-                    {
-                      evacuations.filter(
-                        (evac) =>
-                          evac.barangay.municipality ===
-                          selectedMunicipality.name
-                      ).length
-                    }{" "}
-                    evacuation centers
+                    {municipalityEvacuationCount} evacuation centers
                   </Text>
                 </View>
               </View>
@@ -726,9 +766,9 @@ const BarangayView = ({
                 </View>
                 {(() => {
                   const evacuationCount = evacuations.filter(
-                    (evac) =>
-                      evac.barangay.barangayName ===
-                      selectedBarangay?.barangayName
+                    (evac) => evac.barangay && 
+                    evac.barangay.municipality === selectedMunicipality._id && // Compare by ID
+                    evac.barangay.barangayName === selectedBarangay?.barangayName
                   ).length;
                   if (evacuationCount > 0) {
                     return (

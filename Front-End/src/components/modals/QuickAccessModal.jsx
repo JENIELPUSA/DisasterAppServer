@@ -1,25 +1,25 @@
-import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Modal,
-} from "react-native";
+import React, { useContext } from "react";
+import { View, Text, TouchableOpacity, ScrollView, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { AuthContext } from "../../contexts/AuthContext";
 
 const QuickAccessModal = ({
   visible,
   onClose,
-  menuItems,
+  menuItems = [],
   handleMenuItemPress,
 }) => {
-  const items = menuItems || [];
+  const { role } = useContext(AuthContext);
+
+  // ✅ FILTER BASED ON ROLE
+  const filteredItems = menuItems.filter(
+    (item) => !item.roles || item.roles.includes(role)
+  );
 
   return (
     <Modal
       animationType="slide"
-      transparent={true}
+      transparent
       visible={visible}
       onRequestClose={onClose}
     >
@@ -36,7 +36,7 @@ const QuickAccessModal = ({
 
           <ScrollView className="flex-1 p-4">
             <View className="flex-row flex-wrap justify-between">
-              {items.map((item) => (
+              {filteredItems.map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   className="w-[48%] bg-white rounded-2xl p-4 mb-4 shadow-sm border border-gray-100 items-center"
@@ -54,6 +54,12 @@ const QuickAccessModal = ({
                 </TouchableOpacity>
               ))}
             </View>
+
+            {filteredItems.length === 0 && (
+              <Text className="text-center text-gray-400 mt-10">
+                No services available for your role
+              </Text>
+            )}
           </ScrollView>
         </View>
       </View>
