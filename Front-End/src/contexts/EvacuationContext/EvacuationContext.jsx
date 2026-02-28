@@ -13,11 +13,9 @@ export const EvacuationDisplayContext = createContext();
 
 export const EvacuationDisplayProvider = ({ children }) => {
   const { authToken } = useContext(AuthContext);
-
-  // ==============================
-  // STATE
-  // ==============================
+  const [EvacuationsMunicipal, setEvacuationsMunicipal] = useState();
   const [evacuations, setEvacuations] = useState([]);
+  const [EvacuationsInbarangay, setEvacuationsInbarangay] = useState([]);
   const [totalEvacuations, setTotalEvacuations] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -25,7 +23,7 @@ export const EvacuationDisplayProvider = ({ children }) => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null); // ✅ Added error state
+  const [error, setError] = useState(null); //Added error state
   const [nearEvacuations, setNearEvacuations] = useState([]);
 
   const backendUrl = Constants.expoConfig.extra.apiUrl;
@@ -75,8 +73,36 @@ export const EvacuationDisplayProvider = ({ children }) => {
         setLoading(false);
       }
     },
-    [authToken, search, dateFrom, dateTo]
+    [authToken, search, dateFrom, dateTo],
   );
+
+  const fetchEvacuationsInMunicipality = useCallback(async () => {
+    if (!authToken) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const res = await axios.get(
+        `${backendUrl}/api/v1/Evacuation/DisplayAllEvacuationInMunicipality`,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        },
+      );
+
+      if (res.data.status === "success") {
+        setEvacuationsMunicipal(res.data.data || []);
+      } else {
+        handleError(
+          new Error(res.data.message || "Failed to fetch evacuations"),
+        );
+      }
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [authToken, backendUrl]);
 
   const AddEvacuation = async (values) => {
     try {
@@ -99,9 +125,6 @@ export const EvacuationDisplayProvider = ({ children }) => {
     }
   };
 
-  // ==============================
-  // FETCH NEARBY EVACUATIONS
-  // ==============================
   const fetchNearbyEvacuations = async ({
     latitude,
     longitude,
@@ -125,20 +148,89 @@ export const EvacuationDisplayProvider = ({ children }) => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${authToken}`,
           },
-        }
+        },
       );
 
       if (res.data.status === "success") {
         setNearEvacuations(res.data.data || []);
       } else {
         handleError(
-          new Error(res.data.message || "Failed to fetch nearby evacuations")
+          new Error(res.data.message || "Failed to fetch nearby evacuations"),
         );
       }
     } catch (err) {
       handleError(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchEvacuationsInBarangay = useCallback(
+    async (barangayId, page = 1) => {
+      setLoading(true);
+      try {
+        const params = {
+          page,
+          limit: 10,
+          search,
+          dateFrom,
+          dateTo,
+        };
+
+        const res = await axios.get(
+          `${backendUrl}/api/v1/Evacuation/${barangayId}`,
+          {
+            headers: { Authorization: `Bearer ${authToken}` },
+            params,
+          },
+        );
+
+        setEvacuationsInbarangay(res.data.data);
+      } catch (error) {
+        console.error("Error fetching evacuations:", error);
+        if (error.response && error.response.status === 401) logout();
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authToken, search, dateFrom, dateTo],
+  );
+
+  const updateEvacuation = async (id, values) => {
+    try {
+      const res = await axios.patch(
+        `${backendUrl}/api/v1/Evacuation/${id}`,
+        values,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        },
+      );
+
+      if (res.data.status === "success") {
+        return { success: true, data: res.data.data };
+      } else {
+        throw new Error(res.data.message || "Failed to update barangay");
+      }
+    } catch (error) {
+      handleError(error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const deleteEvacuation = async (id) => {
+    try {
+      const res = await axios.delete(`${backendUrl}/api/v1/Evacuation/${id}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+
+      if (res.data.status === "success") {
+        return { success: true };
+      } else {
+        throw new Error(res.data.message || "Failed to delete Evacuation");
+      }
+    } catch (error) {
+      handleError(error);
+      return { success: false, error: error.message };
     }
   };
 
@@ -169,6 +261,12 @@ export const EvacuationDisplayProvider = ({ children }) => {
         fetchNearbyEvacuations,
         nearEvacuations,
         AddEvacuation,
+        fetchEvacuationsInBarangay,
+        EvacuationsInbarangay,
+        updateEvacuation,
+        deleteEvacuation,
+        EvacuationsMunicipal,
+        fetchEvacuationsInMunicipality
       }}
     >
       {children}

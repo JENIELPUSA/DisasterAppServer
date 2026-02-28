@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,37 +8,59 @@ import {
   Image,
   Modal,
   Alert,
-  Linking,
+  Platform,
+  ActivityIndicator,
+  StatusBar,
 } from "react-native";
-import {
-  Ionicons,
-  MaterialIcons,
-} from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { SafeAreaView } from "react-native-safe-area-context";
+import SelectionModal from "../modals/ReportBahaModal/SelectionModal";
+import StatusModal from "../modals/SuccessFailed/SuccessFailedModal";
 
-// Constants for better maintainability
+// --- EXPANDED REPORT TYPES ---
+const REPORT_TYPES = [
+  { label: "Baha (Flood)", value: "flood", icon: "water" },
+  { label: "Landslide", value: "landslide", icon: "terrain" },
+  { label: "Sunog (Fire)", value: "fire", icon: "local-fire-department" },
+  { label: "Earthquake", value: "earthquake", icon: "vibration" },
+  { label: "Accident", value: "accident", icon: "warning" },
+];
+
+// Existing severity options
 const WATER_LEVELS = [
-  { label: "Ankle-deep (Tobilya)", value: "ankle", depth: "0.1-0.3m" },
-  { label: "Knee-deep (Tuhod)", value: "knee", depth: "0.3-0.5m" },
-  { label: "Waist-deep (Bayan)", value: "waist", depth: "0.5-0.8m" },
-  { label: "Chest-deep (Dibdib)", value: "chest", depth: "0.8-1.2m" },
-  { label: "Neck-deep (Leeg)", value: "neck", depth: "1.2-1.5m" },
-  { label: "Above Head (Lampas Tao)", value: "above_head", depth: "1.5m+" },
+  { label: "Ankle (Tobilya)", value: "ankle" },
+  { label: "Knee (Tuhod)", value: "knee" },
+  { label: "Waist (Kiwal)", value: "waist" },
+  { label: "Chest (Dibdib)", value: "chest" },
+  { label: "Above Head", value: "above_head" },
 ];
 
-const FLOOD_TYPES = [
-  { label: "Dahil sa Ulan", value: "rain_flood" },
-  { label: "High Tide", value: "high_tide" },
-  { label: "Dahil sa Bagyo", value: "storm_flood" },
-  { label: "Iba pang Dahilan", value: "other" },
+const LANDSLIDE_TYPES = [
+  { label: "Minor Fall (Gumuho)", value: "minor" },
+  { label: "Blocked Road (Harang)", value: "blocked" },
+  { label: "Major Slide", value: "major" },
 ];
 
-const SEVERITY_LEVELS = [
-  { label: "Mababa", value: "low", color: "green" },
-  { label: "Katamtaman", value: "medium", color: "yellow" },
-  { label: "Mataas", value: "high", color: "red" },
+// --- NEW SEVERITY OPTIONS ---
+const FIRE_SEVERITIES = [
+  { label: "Minor (Maliit na sunog)", value: "minor" },
+  { label: "Moderate (Kumakalat)", value: "moderate" },
+  { label: "Major (Malaking sunog)", value: "major" },
+];
+
+const EARTHQUAKE_SEVERITIES = [
+  { label: "Weak (Mahina)", value: "weak" },
+  { label: "Moderate (Katamtaman)", value: "moderate" },
+  { label: "Strong (Malakas)", value: "strong" },
+  { label: "Very Strong (Napakalakas)", value: "very_strong" },
+];
+
+const ACCIDENT_SEVERITIES = [
+  { label: "Minor (Maliit na aksidente)", value: "minor" },
+  { label: "Serious (Malubha)", value: "serious" },
+  { label: "Fatal (May nasawi)", value: "fatal" },
 ];
 
 const ReportBahaModal = ({
@@ -48,737 +70,549 @@ const ReportBahaModal = ({
   setSelectedMedia,
   location,
   setLocation,
-  ipAddress,
-  setIpAddress,
   bahaData,
   setBahaData,
   resetReportForms,
+  addIncidentReport,
+  municipalities = [],
+  barangays = [],
 }) => {
+  const [reportType, setReportType] = useState("flood");
+  const [isLocating, setIsLocating] = useState(false);
+  const [muniModalVisible, setMuniModalVisible] = useState(false);
+  const [brgyModalVisible, setBrgyModalVisible] = useState(false);
+  const [locationAccuracy, setLocationAccuracy] = useState(null);
+  const [statusVisible, setStatusVisible] = useState(false);
+  const [statusType, setStatusType] = useState("success");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Media handling functions
-  const handleMediaPick = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (status !== 'granted') {
-        Alert.alert(
-          "Permission Required",
-          "Media library permission is required to select photos and videos.",
-          [{ text: "OK" }]
-        );
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-        allowsEditing: false,
-        aspect: [4, 3],
-        quality: 0.8,
-        allowsMultipleSelection: true,
-        selectionLimit: 10,
-        videoMaxDuration: 30,
-      });
-
-      if (!result.canceled && result.assets) {
-        const newMedia = result.assets.map((asset) => ({
-          uri: asset.uri,
-          type: asset.type || "image",
-          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          duration: asset.duration,
-          fileName: asset.fileName || `media_${Date.now()}`,
-        }));
-        
-        setSelectedMedia((prev) => [...prev, ...newMedia]);
-      }
-    } catch (error) {
-      console.error("Error picking media:", error);
-      Alert.alert("Error", "Failed to select media. Please try again.");
+  // --- Helper to get severity options based on report type ---
+  const getSeverityOptions = () => {
+    switch (reportType) {
+      case "flood":
+        return WATER_LEVELS;
+      case "landslide":
+        return LANDSLIDE_TYPES;
+      case "fire":
+        return FIRE_SEVERITIES;
+      case "earthquake":
+        return EARTHQUAKE_SEVERITIES;
+      case "accident":
+        return ACCIDENT_SEVERITIES;
+      default:
+        return [];
     }
   };
 
-  const handleRemoveMedia = (id) => {
-    setSelectedMedia((prev) => prev.filter((media) => media.id !== id));
+  // --- Helper to get the correct state key for severity ---
+  const getSeverityStateKey = () => {
+    switch (reportType) {
+      case "flood":
+        return "waterLevel";
+      case "landslide":
+        return "landslideType";
+      case "fire":
+        return "fireSeverity";
+      case "earthquake":
+        return "earthquakeSeverity";
+      case "accident":
+        return "accidentSeverity";
+      default:
+        return "";
+    }
   };
 
-  const handleRemoveAllMedia = () => {
-    Alert.alert(
-      "Remove All Media",
-      "Are you sure you want to remove all selected media?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Remove All", 
-          style: "destructive",
-          onPress: () => setSelectedMedia([])
-        },
-      ]
+  // --- Reset form (including new fields) ---
+  const resetForm = () => {
+    setBahaData({
+      municipalityId: "",
+      barangayId: "",
+      address: "",
+      waterLevel: "",
+      landslideType: "",
+      fireSeverity: "",       // new
+      earthquakeSeverity: "", // new
+      accidentSeverity: "",   // new
+    });
+    setSelectedMedia([]);
+    setLocation(null);
+    setLocationAccuracy(null);
+    setReportType("flood");
+    setMuniModalVisible(false);
+    setBrgyModalVisible(false);
+    setIsLocating(false);
+    setIsSubmitting(false);
+  };
+
+  useEffect(() => {
+    if (reportBahaModalVisible) {
+      resetForm();
+    }
+  }, [reportBahaModalVisible]);
+
+  const filteredBarangays = useMemo(() => {
+    if (!bahaData.municipalityId) return [];
+    return barangays.filter(
+      (brgy) => brgy.municipality === bahaData.municipalityId
     );
+  }, [bahaData.municipalityId, barangays]);
+
+  const selectedMuniName =
+    municipalities.find((m) => m._id === bahaData.municipalityId)
+      ?.municipalityName || "Pumili ng Munisipyo";
+  const selectedBrgyName =
+    barangays.find((b) => b._id === bahaData.barangayId)?.barangayName ||
+    "Pumili ng Barangay";
+
+  const handleCloseModal = () => {
+    resetForm();
+    setReportBahaModalVisible(false);
   };
 
-  // Location handling functions
-  const handleLocationRequest = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+  const getBarangayLocation = () => {
+    if (bahaData.barangayId) {
+      const barangay = barangays.find((b) => b._id === bahaData.barangayId);
+      if (barangay && barangay.location && barangay.location.coordinates) {
+        return {
+          latitude: barangay.location.coordinates[1],
+          longitude: barangay.location.coordinates[0],
+        };
+      }
+    }
+    if (bahaData.municipalityId) {
+      const municipality = municipalities.find(
+        (m) => m._id === bahaData.municipalityId
+      );
+      if (municipality && municipality.centerLocation) {
+        return {
+          latitude: municipality.centerLocation.lat,
+          longitude: municipality.centerLocation.lng,
+        };
+      }
+    }
+    return null;
+  };
 
+  const getAccurateLocation = async () => {
+    setIsLocating(true);
+    try {
+      let servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        Alert.alert("GPS Hindi Aktibo", "Paki-on ang Location Services.");
+        return;
+      }
+      let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Location Permission Required",
-          "Location permission is required to report the exact flood location. Please enable location services in settings.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Open Settings", onPress: () => Linking.openSettings() },
-          ]
-        );
+        Alert.alert("Permission Denied", "Kailangan ng access sa lokasyon.");
         return;
       }
 
-      Alert.alert(
-        "Getting Location",
-        "Please wait while we retrieve your current location..."
-      );
+      let bestLocation = null;
+      let bestAccuracy = 1000;
 
-      const currentLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.BestForNavigation,
-        timeout: 15000,
-      });
+      try {
+        const gpsLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Highest,
+          maximumAge: 0,
+          timeout: 10000,
+        });
+        bestLocation = gpsLocation.coords;
+        bestAccuracy = gpsLocation.coords.accuracy;
+        setLocationAccuracy(`GPS (${Math.round(bestAccuracy)}m)`);
+      } catch (gpsError) {
+        console.log("GPS Error:", gpsError);
+      }
 
-      setLocation(currentLocation.coords);
-
-      // Generate simulated IP address
-      const simulatedIp = `100.${Math.floor(Math.random() * 255)}.${Math.floor(
-        Math.random() * 255
-      )}.${Math.floor(Math.random() * 255)}`;
-      setIpAddress(simulatedIp);
-
-      Alert.alert("Success", "Location successfully retrieved!");
+      if (bestLocation) {
+        setLocation({
+          latitude: bestLocation.latitude,
+          longitude: bestLocation.longitude,
+          accuracy: bestAccuracy,
+        });
+      }
     } catch (error) {
-      console.error("Error getting location:", error);
-      Alert.alert(
-        "Location Error",
-        "Unable to retrieve location. Please check your connection and try again."
-      );
+      console.error(error);
+    } finally {
+      setIsLocating(false);
     }
   };
 
-  // Validation functions
-  const validateForm = () => {
-    if (selectedMedia.length === 0) {
-      Alert.alert(
-        "Media Required",
-        "Please upload at least one photo or video of the flood for verification.",
-        [{ text: "OK" }]
-      );
-      return false;
-    }
-
-    if (!bahaData.waterLevel || !bahaData.address) {
-      Alert.alert(
-        "Incomplete Information",
-        "Please fill in all required fields: Water Level and Location.",
-        [{ text: "OK" }]
-      );
-      return false;
-    }
-
-    return true;
-  };
-
-  // Report submission
-  const handleSubmitReport = () => {
-    if (!validateForm()) return;
-
-    if (bahaData.emergencyNeeded) {
-      Alert.alert(
-        "EMERGENCY RESCUE NEEDED",
-        "This is an emergency rescue report. It will be immediately sent to rescue teams.\n\nPlease ensure you are in a safe location and wait for the rescue team.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Confirm Emergency",
-            onPress: processReportSubmission,
-            style: "destructive",
-          },
-        ]
-      );
+  const handleMediaPick = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission Required", "Kailangan ng access sa photos.");
       return;
     }
-
-    processReportSubmission();
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsMultipleSelection: true,
+      quality: 0.7,
+    });
+    if (!result.canceled) {
+      const newMedia = result.assets.map((asset) => ({
+        uri: asset.uri,
+        type: asset.type === "video" ? "video" : "image",
+        id: Math.random().toString(36).substring(7),
+      }));
+      setSelectedMedia([...selectedMedia, ...newMedia]);
+    }
   };
 
-  const processReportSubmission = () => {
-    const reportLocation = location || {
-      latitude: 14.5995, // Default Manila coordinates
-      longitude: 120.9842,
-      accuracy: 5000,
-      isApproximate: true,
-    };
-
-    const photosCount = selectedMedia.filter((m) => m.type === "image").length;
-    const videosCount = selectedMedia.filter((m) => m.type === "video").length;
-
-    const reportData = {
-      ...bahaData,
-      media: selectedMedia,
-      location: reportLocation,
-      ipAddress,
-      timestamp: new Date().toISOString(),
-      reportId: `BF-${Date.now()}`,
-      status: "pending",
-      waterLevelLabel: WATER_LEVELS.find((w) => w.value === bahaData.waterLevel)?.label,
-      mediaCount: {
-        photos: photosCount,
-        videos: videosCount,
-      },
-    };
-
-    console.log("Submitting Flood Report:", reportData);
-
-    showSubmissionSuccess(reportData);
+  const handleSubmit = async () => {
+    if (!bahaData.municipalityId || !bahaData.barangayId || !bahaData.address.trim() || selectedMedia.length === 0) {
+      Alert.alert("Kulang na Datos", "Pakikumpleto ang lahat ng may asterisk (*).");
+      return;
+    }
+    await submitReport();
   };
 
-  const showSubmissionSuccess = (reportData) => {
-    const locationMessage = reportData.location.isApproximate
-      ? "📍 Estimated Location (Recommended: manual location entry)"
-      : `📍 Exact Location: ${reportData.location.latitude.toFixed(4)}, ${reportData.location.longitude.toFixed(4)}`;
+  const submitReport = async () => {
+    setIsSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("type", reportType);
+      if (location) {
+        formData.append("location", JSON.stringify({
+          latitude: location.latitude,
+          longitude: location.longitude,
+          accuracy: location.accuracy || null,
+        }));
+      }
 
-    const emergencyMessage = reportData.emergencyNeeded
-      ? "\n🚨 EMERGENCY RESCUE REPORT - Rescue teams have been notified"
-      : "";
+      // Determine severity based on report type
+      let severityValue = "";
+      switch (reportType) {
+        case "flood":
+          severityValue = bahaData.waterLevel;
+          break;
+        case "landslide":
+          severityValue = bahaData.landslideType;
+          break;
+        case "fire":
+          severityValue = bahaData.fireSeverity;
+          break;
+        case "earthquake":
+          severityValue = bahaData.earthquakeSeverity;
+          break;
+        case "accident":
+          severityValue = bahaData.accidentSeverity;
+          break;
+      }
 
-    Alert.alert(
-      "Successfully Reported!",
-      `✅ Your flood report has been submitted!\n\n📋 Report ID: ${reportData.reportId}\n📸 Photos: ${reportData.mediaCount.photos}\n🎥 Videos: ${reportData.mediaCount.videos}\n${locationMessage}\n🌊 Water Level: ${reportData.waterLevelLabel}${emergencyMessage}`,
-      [
-        {
-          text: "OK",
-          onPress: () => {
-            setReportBahaModalVisible(false);
-            resetReportForms();
-          },
-        },
-      ]
-    );
+      formData.append("details", JSON.stringify({
+        municipalityId: bahaData.municipalityId,
+        barangayId: bahaData.barangayId,
+        address: bahaData.address,
+        severity: severityValue,
+        locationMethod: locationAccuracy || "manual",
+      }));
+
+      selectedMedia.forEach((file, index) => {
+        const fileExtension = file.type === "video" ? "mp4" : "jpg";
+        formData.append("media", {
+          uri: file.uri,
+          type: file.type === "video" ? "video/mp4" : "image/jpeg",
+          name: `report_${Date.now()}_${index}.${fileExtension}`,
+        });
+      });
+
+      const result = await addIncidentReport(formData);
+      if (result.success) {
+        setStatusType("success");
+        setStatusMessage("Matagumpay na naipadala ang iyong report!");
+        setTimeout(() => {
+          resetForm();
+          setStatusVisible(true);
+        }, 1000);
+      } else {
+        setStatusType("error");
+        setStatusMessage(result.error || "❌ Hindi matagumpay ang pagpapadala.");
+        setStatusVisible(true);
+      }
+    } catch (e) {
+      setStatusType("error");
+      setStatusMessage("❌ Nagkaroon ng error.");
+      setStatusVisible(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Media Upload Section Component
-  const MediaUploadSection = () => (
-    <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm border border-gray-100">
-      <Text className="text-lg font-bold text-gray-800 mb-3">
-        Upload Flood Photo or Video *
-      </Text>
-
-      {selectedMedia.length > 0 ? (
-        <View className="items-center">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
-            <View className="flex-row space-x-3">
-              {selectedMedia.map((media) => (
-                <View key={media.id} className="w-32 h-32 relative">
-                  {media.type === "image" ? (
-                    <Image
-                      source={{ uri: media.uri }}
-                      className="w-full h-full rounded-xl"
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View className="w-full h-full rounded-xl bg-gray-800 items-center justify-center">
-                      <Ionicons name="videocam" size={32} color="white" />
-                      <Text className="text-white text-xs mt-2">Video</Text>
-                      {media.duration && (
-                        <Text className="text-white text-xs">
-                          {Math.round(media.duration)}s
-                        </Text>
-                      )}
-                    </View>
-                  )}
-                  <TouchableOpacity
-                    className="absolute -top-2 -right-2 bg-red-500 rounded-full w-6 h-6 items-center justify-center shadow-sm"
-                    onPress={() => handleRemoveMedia(media.id)}
-                  >
-                    <MaterialIcons name="close" size={16} color="white" />
-                  </TouchableOpacity>
-                  <View className="absolute top-2 left-2 bg-black bg-opacity-70 px-2 py-1 rounded">
-                    <Text className="text-white text-xs">
-                      {media.type === "image" ? "PHOTO" : "VIDEO"}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </ScrollView>
-
-          <View className="flex-row space-x-3 w-full">
-            <TouchableOpacity
-              className="flex-1 bg-red-500 py-3 px-4 rounded-full flex-row items-center justify-center shadow-sm"
-              onPress={handleRemoveAllMedia}
-            >
-              <MaterialIcons name="delete" size={18} color="white" />
-              <Text className="text-white font-semibold ml-2 text-sm">
-                Remove All
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-1 bg-blue-500 py-3 px-4 rounded-full flex-row items-center justify-center shadow-sm"
-              onPress={handleMediaPick}
-            >
-              <Ionicons name="add" size={18} color="white" />
-              <Text className="text-white font-semibold ml-2 text-sm">
-                Add More
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text className="text-gray-500 text-sm mt-3 text-center">
-            {selectedMedia.length} media files selected • {selectedMedia.filter((m) => m.type === "image").length} photos • {selectedMedia.filter((m) => m.type === "video").length} videos
-          </Text>
-        </View>
-      ) : (
-        <TouchableOpacity
-          className="bg-blue-50 py-8 rounded-xl items-center border-2 border-dashed border-blue-200"
-          onPress={handleMediaPick}
-        >
-          <Ionicons name="images" size={48} color="#3B82F6" />
-          <Text className="text-blue-600 font-semibold mt-4 text-center text-lg">
-            Select from Gallery
-          </Text>
-          <Text className="text-blue-400 text-sm mt-2 text-center px-4">
-            Choose photos and videos from your device
-          </Text>
-          <Text className="text-blue-300 text-xs mt-3 text-center px-4">
-            Multiple selection supported (up to 10 files)
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
-  // Location Info Section Component
-  const LocationInfoSection = () => (
-    <View className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-200">
-      <View className="flex-row justify-between items-center mb-3">
-        <Text className="text-lg font-bold text-gray-800">
-          Location & Device Information
-        </Text>
-        <TouchableOpacity
-          onPress={handleLocationRequest}
-          className="bg-blue-500 px-4 py-2 rounded-full shadow-sm"
-        >
-          <Text className="text-white text-sm font-semibold">
-            Get Location
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {location ? (
-        <View className="space-y-3">
-          <View className="flex-row justify-between items-center">
-            <Text className="text-gray-600 text-sm">GPS Coordinates:</Text>
-            <Text className="text-gray-800 font-semibold text-sm">
-              {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
-            </Text>
-          </View>
-
-          {location.accuracy && (
-            <View className="flex-row justify-between items-center">
-              <Text className="text-gray-600 text-sm">Accuracy:</Text>
-              <Text className="text-gray-800 font-semibold text-sm">
-                ±{Math.round(location.accuracy)} meters
-              </Text>
-            </View>
-          )}
-
-          <View className="flex-row justify-between items-center">
-            <Text className="text-gray-600 text-sm">IP Address:</Text>
-            <Text className="text-gray-800 font-semibold text-sm">{ipAddress}</Text>
-          </View>
-
-          <View className="flex-row justify-between items-center">
-            <Text className="text-gray-600 text-sm">Timestamp:</Text>
-            <Text className="text-gray-800 font-semibold text-sm">
-              {new Date().toLocaleString()}
-            </Text>
-          </View>
-
-          {location.accuracy > 1000 && (
-            <View className="bg-yellow-100 p-3 rounded-lg mt-2">
-              <Text className="text-yellow-800 text-xs text-center">
-                ⚠️ Using approximate location
-              </Text>
-            </View>
-          )}
-        </View>
-      ) : (
-        <View className="space-y-3">
-          <Text className="text-gray-500 text-center py-3 text-sm">
-            Location not yet retrieved
-          </Text>
-          <View className="bg-blue-100 p-4 rounded-lg">
-            <Text className="text-blue-800 text-sm text-center">
-              Press "Get Location" to retrieve your current location for accurate flood reporting
-            </Text>
-          </View>
-        </View>
-      )}
-    </View>
-  );
-
-  // Form Field Components
-  const WaterLevelSelector = () => (
-    <View className="mb-6">
-      <Text className="text-gray-700 text-sm mb-3 font-semibold">
-        Flood Water Level *
-      </Text>
-      <View className="flex-row flex-wrap -mx-1">
-        {WATER_LEVELS.map((level) => (
-          <TouchableOpacity
-            key={level.value}
-            className={`mx-1 mb-2 px-4 py-3 rounded-xl border-2 ${
-              bahaData.waterLevel === level.value
-                ? "bg-blue-500 border-blue-500 shadow-sm"
-                : "bg-white border-gray-300"
-            }`}
-            onPress={() =>
-              setBahaData({
-                ...bahaData,
-                waterLevel: level.value,
-                waterLevelLabel: level.label,
-              })
-            }
-          >
-            <Text
-              className={`font-medium text-sm ${
-                bahaData.waterLevel === level.value
-                  ? "text-white"
-                  : "text-gray-700"
-              }`}
-            >
-              {level.label}
-            </Text>
-            <Text
-              className={`text-xs mt-1 ${
-                bahaData.waterLevel === level.value
-                  ? "text-blue-100"
-                  : "text-gray-500"
-              }`}
-            >
-              {level.depth}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-
-  const FloodTypeSelector = () => (
-    <View className="mb-6">
-      <Text className="text-gray-700 text-sm mb-3 font-semibold">
-        Flood Type
-      </Text>
-      <View className="flex-row flex-wrap -mx-1">
-        {FLOOD_TYPES.map((type) => (
-          <TouchableOpacity
-            key={type.value}
-            className={`mx-1 mb-2 px-4 py-3 rounded-xl border ${
-              bahaData.floodType === type.value
-                ? "bg-blue-500 border-blue-500"
-                : "bg-white border-gray-300"
-            }`}
-            onPress={() =>
-              setBahaData({ ...bahaData, floodType: type.value })
-            }
-          >
-            <Text
-              className={
-                bahaData.floodType === type.value
-                  ? "text-white font-medium text-sm"
-                  : "text-gray-700 text-sm"
-              }
-            >
-              {type.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-
-  const SeveritySelector = () => (
-    <View className="mb-6">
-      <Text className="text-gray-700 text-sm mb-3 font-semibold">
-        Severity Level *
-      </Text>
-      <View className="flex-row justify-between space-x-2">
-        {SEVERITY_LEVELS.map((item) => (
-          <TouchableOpacity
-            key={item.value}
-            className={`flex-1 py-4 rounded-xl items-center border-2 ${
-              bahaData.severity === item.value
-                ? `bg-${item.color}-500 border-${item.color}-500 shadow-sm`
-                : "bg-white border-gray-300"
-            }`}
-            onPress={() =>
-              setBahaData({ ...bahaData, severity: item.value })
-            }
-          >
-            <Text
-              className={`font-semibold text-sm ${
-                bahaData.severity === item.value
-                  ? "text-white"
-                  : "text-gray-700"
-              }`}
-            >
-              {item.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-
-  const EmergencyInfoSection = () => (
-    <View className="mb-6">
-      <Text className="text-gray-700 text-sm mb-3 font-semibold">
-        Emergency Information
-      </Text>
-      <View className="space-y-3">
-        <View className="flex-row items-center justify-between p-4 bg-yellow-50 rounded-xl border border-yellow-200">
-          <View className="flex-1">
-            <Text className="text-yellow-800 font-semibold text-sm">
-              Stranded Vehicles?
-            </Text>
-            <Text className="text-yellow-600 text-xs mt-1">
-              Check if vehicles are stuck in floodwater
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() =>
-              setBahaData({
-                ...bahaData,
-                vehiclesStranded: !bahaData.vehiclesStranded,
-              })
-            }
-          >
-            <Ionicons
-              name={
-                bahaData.vehiclesStranded
-                  ? "checkmark-circle"
-                  : "ellipse-outline"
-              }
-              size={28}
-              color={bahaData.vehiclesStranded ? "#F59E0B" : "#6B7280"}
-            />
-          </TouchableOpacity>
-        </View>
-
-        <View className="flex-row items-center justify-between p-4 bg-red-50 rounded-xl border border-red-200">
-          <View className="flex-1">
-            <Text className="text-red-800 font-semibold text-sm">
-              Road Blocked?
-            </Text>
-            <Text className="text-red-600 text-xs mt-1">
-              Check if vehicles cannot pass through
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() =>
-              setBahaData({
-                ...bahaData,
-                roadClosed: !bahaData.roadClosed,
-              })
-            }
-          >
-            <Ionicons
-              name={
-                bahaData.roadClosed
-                  ? "checkmark-circle"
-                  : "ellipse-outline"
-              }
-              size={28}
-              color={bahaData.roadClosed ? "#EF4444" : "#6B7280"}
-            />
-          </TouchableOpacity>
-        </View>
-
-        <View className="flex-row items-center justify-between p-4 bg-red-100 rounded-xl border border-red-300">
-          <View className="flex-1">
-            <Text className="text-red-900 font-semibold text-sm">
-              Emergency Rescue Needed?
-            </Text>
-            <Text className="text-red-700 text-xs mt-1">
-              Check if people need immediate rescue assistance
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() =>
-              setBahaData({
-                ...bahaData,
-                emergencyNeeded: !bahaData.emergencyNeeded,
-              })
-            }
-          >
-            <Ionicons
-              name={
-                bahaData.emergencyNeeded
-                  ? "checkmark-circle"
-                  : "ellipse-outline"
-              }
-              size={28}
-              color={bahaData.emergencyNeeded ? "#DC2626" : "#6B7280"}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-
+  // --- UI (minor adjustments for new types) ---
   return (
-    <Modal
-      animationType="slide"
-      transparent={false}
+    <Modal 
+      animationType="slide" 
       visible={reportBahaModalVisible}
-      onRequestClose={() => {
-        setReportBahaModalVisible(false);
-        resetReportForms();
-      }}
-      statusBarTranslucent={false}
+      onRequestClose={handleCloseModal}
+      statusBarTranslucent
     >
-      <SafeAreaView className="flex-1 bg-white">
-        {/* Header */}
-        <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-200 bg-white">
-          <Text className="text-2xl font-bold text-gray-800">
-            Report Road Flooding
-          </Text>
-          <TouchableOpacity
-            onPress={() => {
-              setReportBahaModalVisible(false);
-              resetReportForms();
-            }}
-            className="p-2 rounded-full bg-gray-100"
-          >
-            <MaterialIcons name="close" size={24} color="#6B7280" />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView 
-          className="flex-1 px-5" 
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 30 }}
-        >
-          {/* Media Upload Section */}
-          <MediaUploadSection />
-
-          {/* Location Information */}
-          <LocationInfoSection />
-
-          {/* Report Details Form */}
-          <View className="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-gray-100">
-            <Text className="text-lg font-bold text-gray-800 mb-6">
-              Flood Details
-            </Text>
-
-            {/* Water Level Selector */}
-            <WaterLevelSelector />
-
-            {/* Flood Type Selector */}
-            <FloodTypeSelector />
-
-            {/* Severity Selector */}
-            <SeveritySelector />
-
-            {/* Location Address */}
-            <View className="mb-6">
-              <Text className="text-gray-700 text-sm mb-3 font-semibold">
-                Location (Address) *
+      <View className="flex-1 bg-cyan-700">
+        <StatusBar backgroundColor="transparent" translucent barStyle="light-content" />
+        
+        {/* Header Section */}
+        <SafeAreaView edges={['top']}>
+          <View className="flex-row items-center justify-between px-6 py-6">
+            <View className="flex-1">
+              <Text className="text-3xl font-black text-white leading-tight">
+                Mag-ulat ng{"\n"}Sakuna
               </Text>
-              <TextInput
-                className="bg-gray-50 rounded-xl px-4 py-4 border border-gray-200 text-base"
-                placeholder="Enter street name and flood location details"
-                value={bahaData.address}
-                onChangeText={(text) =>
-                  setBahaData({ ...bahaData, address: text })
-                }
-                multiline
-                numberOfLines={2}
-              />
-            </View>
-
-            {/* Description */}
-            <View className="mb-6">
-              <Text className="text-gray-700 text-sm mb-3 font-semibold">
-                Description
-              </Text>
-              <TextInput
-                className="bg-gray-50 rounded-xl px-4 py-4 border border-gray-200 h-32 text-base"
-                placeholder="Describe the flood situation, current conditions, and any additional details..."
-                value={bahaData.description}
-                onChangeText={(text) =>
-                  setBahaData({ ...bahaData, description: text })
-                }
-                multiline
-                textAlignVertical="top"
-              />
-            </View>
-
-            {/* Emergency Information */}
-            <EmergencyInfoSection />
-
-            {/* Additional Information */}
-            <View className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
-              <Text className="text-blue-800 font-semibold mb-2 text-sm">
-                Additional Flood Information
-              </Text>
-              <Text className="text-blue-600 text-xs leading-5">
-                • Report exact water level for accurate assessment{"\n"}
-                • Include photos showing the flood extent{"\n"}
-                • Note if vehicles or pedestrians can still pass{"\n"}
-                • Report any visible hazards in the water{"\n"}
-                • Include time of observation for trend analysis
-              </Text>
-            </View>
-          </View>
-
-          {/* Safety Warning */}
-          <View className="bg-red-50 rounded-2xl p-5 mb-6 border border-red-200">
-            <View className="flex-row items-start">
-              <Ionicons name="warning" size={28} color="#EF4444" />
-              <View className="ml-4 flex-1">
-                <Text className="text-red-800 font-bold text-lg mb-2">
-                  SAFETY WARNING: Exercise Caution!
-                </Text>
-                <Text className="text-red-700 text-sm leading-5">
-                  • Do not enter floodwaters unnecessarily{"\n"}
-                  • Do not risk safety to take photos{"\n"}
-                  • Floodwaters may contain strong currents or contaminants{"\n"}
-                  • If rescue is needed, call emergency services immediately{"\n"}
-                  • Stay in safe locations while reporting
+              <View className="flex-row items-center mt-2">
+                <MaterialIcons name="info" size={14} color="rgba(255,255,255,0.7)" />
+                <Text className="text-white/70 text-xs font-bold ml-1 uppercase tracking-wider">
+                  Incident Reporting Tool
                 </Text>
               </View>
             </View>
+            <TouchableOpacity 
+              onPress={handleCloseModal}
+              className="bg-white/20 p-3 rounded-full active:bg-white/40"
+            >
+              <MaterialIcons name="close" size={24} color="white" />
+            </TouchableOpacity>
           </View>
+        </SafeAreaView>
 
-          {/* Submit Button */}
-          <TouchableOpacity
-            className={`py-5 rounded-xl items-center mb-2 shadow-sm ${
-              selectedMedia.length === 0
-                ? "bg-gray-400"
-                : "bg-blue-600"
-            }`}
-            onPress={handleSubmitReport}
-            disabled={selectedMedia.length === 0}
+        {/* CURVED WHITE CONTAINER */}
+        <View className="flex-1 bg-white rounded-t-[35px] overflow-hidden shadow-2xl">
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, paddingBottom: 60 }}
+            showsVerticalScrollIndicator={false}
           >
-            <Text className="text-white text-lg font-semibold">
-              {selectedMedia.length === 0
-                ? "Upload Media to Submit Report"
-                : `Submit Flood Report • ${selectedMedia.filter((m) => m.type === "image").length} photos, ${selectedMedia.filter((m) => m.type === "video").length} videos`}
-            </Text>
-          </TouchableOpacity>
+            {/* Report Type Selector */}
+            <View className="mb-8">
+              <Text className="font-black text-gray-400 mb-3 uppercase text-[10px] tracking-[2px]">
+                Uri ng Sakuna
+              </Text>
+              <View className="flex-row flex-wrap gap-3">
+                {REPORT_TYPES.map((type) => (
+                  <TouchableOpacity
+                    key={type.value}
+                    onPress={() => setReportType(type.value)}
+                    className={`flex-1 min-w-[40%] flex-row items-center justify-center py-4 rounded-2xl border-2 ${
+                      reportType === type.value
+                        ? "border-cyan-500 bg-cyan-50"
+                        : "border-gray-100 bg-gray-50"
+                    }`}
+                  >
+                    <MaterialIcons
+                      name={type.icon}
+                      size={22}
+                      color={reportType === type.value ? "#06B6D4" : "#9CA3AF"}
+                    />
+                    <Text
+                      className={`ml-2 font-bold ${
+                        reportType === type.value ? "text-cyan-600" : "text-gray-400"
+                      }`}
+                    >
+                      {type.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
-          {/* Footer Note */}
-          <Text className="text-gray-500 text-xs text-center px-4">
-            Your report helps improve flood monitoring and emergency response. All data is verified before publication.
-          </Text>
-        </ScrollView>
-      </SafeAreaView>
+            {/* Location Section (unchanged) */}
+            <View className="bg-gray-50/80 p-5 rounded-[30px] border border-gray-100 mb-6">
+              <Text className="font-black text-gray-400 mb-4 uppercase text-[10px] tracking-[2px]">
+                Lugar ng Insidente
+              </Text>
+              
+              <Text className="font-bold text-gray-700 mb-2 ml-1">Munisipyo *</Text>
+              <TouchableOpacity
+                onPress={() => setMuniModalVisible(true)}
+                className="flex-row items-center justify-between bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm"
+              >
+                <Text className={selectedMuniName.includes("Pumili") ? "text-gray-300" : "text-gray-800 font-semibold"}>
+                  {selectedMuniName}
+                </Text>
+                <MaterialIcons name="keyboard-arrow-down" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+
+              <Text className="font-bold text-gray-700 mb-2 ml-1">Barangay *</Text>
+              <TouchableOpacity
+                onPress={() => setBrgyModalVisible(true)}
+                disabled={!bahaData.municipalityId}
+                className={`flex-row items-center justify-between bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm ${!bahaData.municipalityId ? "opacity-40" : ""}`}
+              >
+                <Text className={selectedBrgyName.includes("Pumili") ? "text-gray-300" : "text-gray-800 font-semibold"}>
+                  {selectedBrgyName}
+                </Text>
+                <MaterialIcons name="keyboard-arrow-down" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+
+              <Text className="font-bold text-gray-700 mb-2 ml-1">Eksaktong Lokasyon *</Text>
+              <TextInput
+                className="bg-white border border-gray-200 rounded-xl p-4 text-gray-800 shadow-sm"
+                placeholder="Purok, Landmark, o Kalye..."
+                placeholderTextColor="#D1D5DB"
+                value={bahaData.address}
+                onChangeText={(val) => setBahaData({ ...bahaData, address: val })}
+              />
+            </View>
+
+            {/* Media Section (unchanged) */}
+            <View className="mb-6">
+              <Text className="font-black text-gray-400 mb-3 uppercase text-[10px] tracking-[2px]">
+                Dokumentasyon
+              </Text>
+              {selectedMedia.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
+                  <View className="flex-row">
+                    {selectedMedia.map((m) => (
+                      <View key={m.id} className="w-24 h-24 mr-3 rounded-2xl bg-gray-100 overflow-hidden relative border border-gray-100">
+                        <Image source={{ uri: m.uri }} className="w-full h-full" />
+                        <TouchableOpacity 
+                          onPress={() => setSelectedMedia(selectedMedia.filter((item) => item.id !== m.id))}
+                          className="absolute top-1 right-1 bg-black/50 p-1.5 rounded-full"
+                        >
+                          <MaterialIcons name="close" size={14} color="white" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    <TouchableOpacity 
+                      onPress={handleMediaPick} 
+                      className="w-24 h-24 border-2 border-dashed border-gray-200 rounded-2xl items-center justify-center bg-gray-50"
+                    >
+                      <Ionicons name="add" size={32} color="#D1D5DB" />
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              ) : (
+                <TouchableOpacity 
+                  onPress={handleMediaPick} 
+                  className="py-12 border-2 border-dashed border-cyan-100 bg-cyan-50/30 rounded-[30px] items-center"
+                >
+                  <View className="bg-cyan-100 p-4 rounded-full mb-3">
+                    <Ionicons name="camera" size={32} color="#06B6D4" />
+                  </View>
+                  <Text className="text-cyan-600 font-bold">Mag-attach ng Media *</Text>
+                  <Text className="text-cyan-400 text-xs mt-1">Larawan o Video ng insidente</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Severity Section - Now dynamic */}
+            <View className="bg-gray-50/80 p-5 rounded-[30px] border border-gray-100 mb-6">
+              <Text className="font-black text-gray-400 mb-4 uppercase text-[10px] tracking-[2px]">
+                {reportType === "flood" && "Antas ng Baha"}
+                {reportType === "landslide" && "Uri ng Landslide"}
+                {reportType === "fire" && "Laki ng Sunog"}
+                {reportType === "earthquake" && "Intensity ng Lindol"}
+                {reportType === "accident" && "Grabe ng Aksidente"}
+              </Text>
+              <View className="flex-row flex-wrap">
+                {getSeverityOptions().map((item) => {
+                  const stateKey = getSeverityStateKey();
+                  const isSelected = bahaData[stateKey] === item.value;
+                  return (
+                    <TouchableOpacity
+                      key={item.value}
+                      onPress={() => setBahaData({ ...bahaData, [stateKey]: item.value })}
+                      className={`mr-2 mb-2 px-4 py-2.5 rounded-xl border-2 ${
+                        isSelected
+                          ? "bg-cyan-600 border-cyan-600"
+                          : "bg-white border-gray-100"
+                      }`}
+                    >
+                      <Text className={`font-bold ${isSelected ? "text-white" : "text-gray-500"}`}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* GPS Section (unchanged) */}
+            <View className="bg-gray-900 p-6 rounded-[30px] mb-8 shadow-xl">
+               <View className="flex-row items-center justify-between mb-4">
+                  <View className="flex-row items-center">
+                    <MaterialIcons name="my-location" size={20} color="#06B6D4" />
+                    <Text className="text-white font-black ml-2 uppercase text-xs tracking-widest">GPS Localization</Text>
+                  </View>
+                  {location && (
+                    <View className="bg-green-500/20 px-2 py-1 rounded-md">
+                      <Text className="text-green-400 text-[10px] font-bold">CONNECTED</Text>
+                    </View>
+                  )}
+               </View>
+
+               {location && (
+                 <View className="bg-white/10 p-4 rounded-2xl mb-4 border border-white/5">
+                   <Text className="text-white/60 text-xs font-bold">Accuracy: {Math.round(location.accuracy)}m</Text>
+                   <Text className="text-cyan-400 text-[10px] mt-1">{locationAccuracy}</Text>
+                 </View>
+               )}
+
+               <TouchableOpacity
+                 onPress={getAccurateLocation}
+                 disabled={isLocating}
+                 className={`py-4 rounded-2xl items-center flex-row justify-center ${isLocating ? "bg-white/10" : "bg-cyan-500"}`}
+               >
+                 {isLocating ? <ActivityIndicator color="white" size="small" /> : (
+                   <>
+                     <MaterialIcons name="refresh" size={18} color="white" />
+                     <Text className="text-white font-black ml-2 text-sm">UPDATE GPS LOCATION</Text>
+                   </>
+                 )}
+               </TouchableOpacity>
+            </View>
+
+            {/* Final Action Buttons (unchanged) */}
+            <TouchableOpacity
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+              className={`py-5 rounded-2xl items-center shadow-lg ${isSubmitting ? "bg-gray-200" : "bg-cyan-600"}`}
+            >
+              {isSubmitting ? <ActivityIndicator color="white" /> : (
+                <Text className="text-white font-black text-lg tracking-[2px]">I-SUBMIT ANG ULAT</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={resetForm} className="py-6">
+              <Text className="text-gray-400 text-center font-bold text-xs uppercase tracking-widest">I-clear ang lahat</Text>
+            </TouchableOpacity>
+            
+          </ScrollView>
+        </View>
+
+        {/* Pickers and Feedback Modals (unchanged) */}
+        <SelectionModal
+          visible={muniModalVisible}
+          onClose={() => setMuniModalVisible(false)}
+          title="Pumili ng Munisipyo"
+          data={municipalities}
+          labelKey="municipalityName"
+          onSelect={(item) => {
+            setBahaData({ ...bahaData, municipalityId: item._id, barangayId: "" });
+            setMuniModalVisible(false);
+          }}
+        />
+
+        <SelectionModal
+          visible={brgyModalVisible}
+          onClose={() => setBrgyModalVisible(false)}
+          title="Pumili ng Barangay"
+          data={filteredBarangays}
+          labelKey="barangayName"
+          onSelect={(item) => {
+            setBahaData({ ...bahaData, barangayId: item._id });
+            setBrgyModalVisible(false);
+          }}
+        />
+        
+        <StatusModal
+          visible={statusVisible}
+          type={statusType}
+          message={statusMessage}
+          onClose={() => {
+            setStatusVisible(false);
+            if (statusType === "success") handleCloseModal();
+          }}
+        />
+      </View>
     </Modal>
   );
 };

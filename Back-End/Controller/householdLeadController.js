@@ -1,9 +1,102 @@
 // controllers/householdLeadController.js
 const HouseholdLead = require("../Models/HouseholdLead");
 const User = require("../Models/UserModel");
-const HouseholdMember = require("../Models/HouseholdMember");
 const AsyncErrorHandler = require("../Utils/AsyncErrorHandler");
 const mongoose = require("mongoose");
+exports.getHouseholdWithMembers = async (req, res) => {
+  try {
+    const userId = req.user.linkId;
+
+    // Hanapin HouseholdLead ng user
+    const householdLead = await HouseholdLead.findOne({ userId });
+    if (!householdLead) {
+      return res.status(404).json({ message: "HouseholdLead not found" });
+    }
+
+    const householdLeadId = householdLead._id;
+
+    // Aggregation
+    const data = await HouseholdLead.aggregate([
+      {
+        $match: { _id: householdLeadId },
+      },
+
+      // Join sa UserLoginSchema para sa lead info
+      {
+        $lookup: {
+          from: "userloginschemas", // collection name, lowercase + plural
+          localField: "userId",
+          foreignField: "_id",
+          as: "leadInfo",
+        },
+      },
+      { $unwind: "$leadInfo" }, // flatten array
+
+      // Join sa HouseholdMember
+      {
+        $lookup: {
+          from: "householdmembers",
+          localField: "_id",
+          foreignField: "householdLeadId",
+          as: "members",
+        },
+      },
+
+      // Join sa UserLoginSchema para sa bawat member
+      {
+        $lookup: {
+          from: "userloginschemas",
+          let: { memberIds: "$members.userId" },
+          pipeline: [
+            { $match: { $expr: { $in: ["$_id", "$$memberIds"] } } },
+            {
+              $project: {
+                fullName: 1,
+                address: 1,
+                contactNumber: 1
+              },
+            },
+          ],
+          as: "membersInfo",
+        },
+      },
+
+      // Optional: compute total members
+      {
+        $addFields: {
+          actualMembersCount: { $add: [{ $size: "$members" }, 1] }, // +1 ang lead
+        },
+      },
+
+      // Project final fields
+      {
+        $project: {
+          householdCode: 1,
+          familyMembers: 1,
+          totalMembers: 1,
+          rescueStatus: 1,
+          emergencyContact: 1,
+          location: 1,
+          lead: {
+            fullName: "$leadInfo.fullName",
+            address: "$leadInfo.address",
+            contactNumber: "$leadInfo.contactNumber",
+          },
+          members: "$membersInfo",
+          actualMembersCount: 1,
+        },
+      },
+    ]);
+
+    res.status(200).json({
+      status: "success",
+      data: data[0],
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ status: "error" });
+  }
+};
 
 exports.DisplayNearHouseLead = async (req, res, io) => {
   try {
@@ -175,7 +268,7 @@ exports.createHouseholdLead = async (req, res) => {
 
     // Populate user details
     const populatedHouseholdLead = await HouseholdLead.findById(
-      newHouseholdLead._id
+      newHouseholdLead._id,
     ).populate("userId", "fullName email contactNumber address barangay");
 
     res.status(201).json({
@@ -202,7 +295,7 @@ exports.getHouseholdLeadsByBarangayId = async (req, res) => {
         .json({ success: false, message: "barangayId is required" });
 
     const data = await HouseholdLead.aggregate([
-      { $match: { barangayId: new mongoose.Types.ObjectId(barangayId) } },
+      { $match: { barangayId: barangayId } },
       // Lookup household members
       {
         $lookup: {
@@ -272,7 +365,7 @@ exports.updateHouseholdLead = async (req, res) => {
     const updatedHouseholdLead = await HouseholdLead.findOneAndUpdate(
       { userId },
       { $set: updateData },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).populate("userId", "fullName email contactNumber address barangay");
 
     res.status(200).json({
@@ -382,7 +475,7 @@ exports.searchHouseholdLeads = async (req, res) => {
     if (barangay) userFilter.barangay = barangay;
 
     const users = await User.find(userFilter).select(
-      "_id fullName email contactNumber address barangay"
+      "_id fullName email contactNumber address barangay",
     );
 
     const userIds = users.map((user) => user._id);
@@ -433,7 +526,7 @@ exports.getHouseholdLeads = AsyncErrorHandler(async (req, res, next) => {
   }
 
   const householdLeadUsers = await User.find(userQuery).select(
-    "_id fullName email contactNumber address barangay"
+    "_id fullName email contactNumber address barangay",
   );
 
   const userIds = householdLeadUsers.map((user) => user._id);
@@ -445,7 +538,7 @@ exports.getHouseholdLeads = AsyncErrorHandler(async (req, res, next) => {
   // Combine data
   const result = householdLeads.map((lead) => {
     const user = householdLeadUsers.find(
-      (u) => u._id.toString() === lead.userId.toString()
+      (u) => u._id.toString() === lead.userId.toString(),
     );
     return {
       id: lead._id,
@@ -524,15 +617,17 @@ exports.DropdownAllHouseHold = async (req, res) => {
   }
 };
 
-// Get Household Leads for Dropdown using $lookup including barangay
+// Get Household Leads for Dropdown including barangay + checkedIn info
 exports.getHouseholdLeadsSendNotification = AsyncErrorHandler(
   async (req, res, next) => {
     const householdLeads = await HouseholdLead.aggregate([
       {
         $match: {
-          rescueStatus: { $ne: "none" }, // filter only leads with active rescue
+          rescueStatus: { $ne: "none" }, // only active rescue households
         },
       },
+
+      // Join lead user info
       {
         $lookup: {
           from: "userloginschemas",
@@ -542,16 +637,83 @@ exports.getHouseholdLeadsSendNotification = AsyncErrorHandler(
         },
       },
       { $unwind: "$user" },
+
+      // 🔹 Join barangay info
       {
         $lookup: {
-          from: "barangays", // collection name ng Barangay model sa MongoDB
+          from: "barangays",
           localField: "barangayId",
           foreignField: "_id",
           as: "barangay",
         },
       },
-      { $unwind: { path: "$barangay", preserveNullAndEmptyArrays: true } }, // allow null
-      // Select fields
+      { $unwind: { path: "$barangay", preserveNullAndEmptyArrays: true } },
+
+      // 🔹 Join household members
+      {
+        $lookup: {
+          from: "householdmembers",
+          localField: "_id",
+          foreignField: "householdLeadId",
+          as: "members",
+        },
+      },
+
+      // 🔹 Combine lead + members userIds
+      {
+        $addFields: {
+          allUserIds: {
+            $concatArrays: [
+              ["$userId"], // lead
+              { $map: { input: "$members", as: "m", in: "$$m.userId" } },
+            ],
+          },
+        },
+      },
+
+      // 🔹 Lookup Tracking for check-ins
+      {
+        $lookup: {
+          from: "trackings",
+          let: { userIds: "$allUserIds" },
+          pipeline: [
+            { $match: { scanType: "check_in" } },
+            { $match: { $expr: { $in: ["$userId", "$$userIds"] } } },
+          ],
+          as: "checkedInUsers",
+        },
+      },
+
+      // 🔹 Compute membersCheckedIn, totalMembers, and auto rescueStatus
+      {
+        $addFields: {
+          membersCheckedIn: { $size: "$checkedInUsers" },
+          totalMembers: { $add: [{ $size: "$members" }, 1] }, // kasama ang lead
+          checkedInPercentage: {
+            $multiply: [
+              {
+                $cond: [
+                  { $gt: [{ $add: [{ $size: "$members" }, 1] }, 0] },
+                  { $divide: [{ $size: "$checkedInUsers" }, { $add: [{ $size: "$members" }, 1] }] },
+                  0,
+                ],
+              },
+              100,
+            ],
+          },
+          rescueStatus: {
+            $switch: {
+              branches: [
+                { case: { $eq: [{ $size: "$checkedInUsers" }, 0] }, then: "pending" },
+                { case: { $eq: [{ $size: "$checkedInUsers" }, { $add: [{ $size: "$members" }, 1] }] }, then: "rescued" },
+              ],
+              default: "in_progress",
+            },
+          },
+        },
+      },
+
+      // 🔹 Project final fields for dropdown
       {
         $project: {
           id: "$_id",
@@ -559,13 +721,14 @@ exports.getHouseholdLeadsSendNotification = AsyncErrorHandler(
           email: "$user.email",
           address: "$user.address",
           contact: "$user.contactNumber",
-          barangayName: "$barangay.name", // adjust field name sa collection mo
-          members: "$totalMembers",
-          maxMembers: "$familyMembers",
-          location: 1,
-          isFull: 1,
+          barangayName: "$barangay.name",
+          membersCheckedIn: 1,
+          totalMembers: 1,
+          checkedInPercentage: 1,
           householdCode: 1,
           rescueStatus: 1,
+          location: 1,
+          isFull: 1,
         },
       },
     ]);
@@ -577,3 +740,4 @@ exports.getHouseholdLeadsSendNotification = AsyncErrorHandler(
     });
   }
 );
+

@@ -1,93 +1,147 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+  useCallback,
+} from "react";
 import axios from "axios";
-import { useAuth } from "../AuthContext";
-import axiosInstance from "../../ReusableFolder/axioxInstance";
-export const NotificationDisplayContext = createContext();
+import Constants from "expo-constants";
+import { AuthContext } from "../AuthContext";
+import { io } from "socket.io-client";
 
-export const NotificationDisplayProvider = ({ children }) => {
-    const { authToken, linkId } = useAuth();
-    const [notify, setNotify] = useState([]);
-    const [showAll, setShowAll] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [isunread, setunread] = useState(0);
-    const fetchNotifications = async (showAllFlag = false) => {
-        if (!linkId || !authToken) return;
+export const NotificationContext = createContext();
 
+export const NotificationProvider = ({ children }) => {
+  const { authToken, logout, user } = useContext(AuthContext);
+
+  const [Notification, setNotification] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [socket, setSocket] = useState(null);
+
+  const backendUrl = Constants.expoConfig.extra.apiUrl;
+
+  // --- Handle errors centrally ---
+  const handleError = (err) => {
+    console.error(err);
+    if (err.response?.status === 401) logout();
+  };
+
+  // --- Initialize socket connection ---
+  useEffect(() => {
+    const newSocket = io(backendUrl, {
+      transports: ["websocket"],
+    });
+    setSocket(newSocket);
+
+    return () => newSocket.disconnect();
+  }, [backendUrl]);
+
+  // --- Listen for real-time Notification ---
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("notification:new", (notif) => {
+      setNotification((prev) => [notif, ...prev]);
+    });
+
+    return () => {
+      socket.off("notification:new");
+    };
+  }, [socket]);
+
+  // --- Fetch Notification from backend ---
+  const fetchNotification = useCallback(
+    async (municipalityId = "") => {
+      if (!authToken) return;
+
+      try {
         setLoading(true);
-        try {
-            const queryParams = showAllFlag ? `?limit=all` : ``;
-            const res = await axiosInstance.get(
-                `${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/api/v1/Notification/getByLink/${linkId}${queryParams}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${authToken}`,
-                    },
-                },
-            );
+        const params = {};
+        if (municipalityId) params.municipalityId = municipalityId;
 
-            setunread(res.data.unreadCount);
+        const res = await axios.get(`${backendUrl}/api/v1/Notification`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+          params,
+        });
 
+        setNotification(res.data.data || []);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authToken, backendUrl]
+  );
 
-            console.log("Notification data",res.data.data)
-            setNotify(res.data.data);
-            setShowAll(showAllFlag);
-        } catch (err) {
-            console.error("Error fetching notifications:", err);
-        } finally {
-            setLoading(false);
+  // --- Create a new notification ---
+  const createNotification = useCallback(
+    async (values) => {
+      if (!authToken) return { success: false, error: "No auth" };
+
+      try {
+        const res = await axios.post(`${backendUrl}/api/v1/Notification`, values, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+
+        if (res.data.data) {
+          // Add locally immediately (optimistic update)
+          setNotification((prev) => [res.data.data, ...prev]);
+          return { success: true, data: res.data.data };
         }
-    };
 
-    useEffect(() => {
-        fetchNotifications();
-    }, [linkId, authToken]);
+        return { success: false, error: res.data.message };
+      } catch (err) {
+        handleError(err);
+        return { success: false, error: err.response?.data?.message || err.message };
+      }
+    },
+    [authToken, backendUrl]
+  );
 
-    const markNotificationAsRead = async (notifId) => {
-        if (!authToken) return console.error("Auth token is missing");
-        if (!linkId) return console.error("Link ID is missing");
-        if (!notifId) return console.error("Notification ID is missing");
+  // --- Delete notification ---
+  const deleteNotification = useCallback(
+    async (id) => {
+      if (!authToken) return { success: false, error: "No auth" };
 
-        try {
-            await axiosInstance.patch(
-                `${import.meta.env.VITE_REACT_APP_BACKEND_BASEURL}/api/v1/Notification/${notifId}/mark-read`,
-                { linkId },
-                {
-                    headers: {
-                        Authorization: `Bearer ${authToken}`,
-                    },
-                },
-            );
+      try {
+        const res = await axios.delete(`${backendUrl}/api/v1/Notification/${id}`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
 
-            setNotify((prev) =>
-                prev.map((n) => {
-                    if (n._id === notifId) {
-                        // I-update lang yung viewer na tumutugma sa linkId
-                        const updatedViewers = n.viewers.map((v) => (v.user === linkId ? { ...v, isRead: true } : v));
-                        return { ...n, viewers: updatedViewers };
-                    }
-                    return n;
-                }),
-            );
-        } catch (error) {
-            console.error("Failed to mark notification as read:", error);
+        if (res.data.success) {
+          setNotification((prev) => prev.filter((n) => n._id !== id));
+          return { success: true };
         }
-    };
 
-    return (
-        <NotificationDisplayContext.Provider
-            value={{
-                notify,
-                isunread,
-                setNotify,
-                markNotificationAsRead,
-                fetchNotifications,
-                showAll,
-                loading,
-            }}
-        >
-            {children}
-        </NotificationDisplayContext.Provider>
-    );
+        return { success: false, error: res.data.message };
+      } catch (err) {
+        handleError(err);
+        return { success: false, error: err.response?.data?.message || err.message };
+      }
+    },
+    [authToken, backendUrl]
+  );
+
+  // --- Clear all Notification locally ---
+  const clearNotification = () => setNotification([]);
+
+  return (
+    <NotificationContext.Provider
+      value={{
+        Notification,
+        loading,
+        error,
+        fetchNotification,
+        createNotification,
+        deleteNotification,
+        clearNotification,
+        socket,
+      }}
+    >
+      {children}
+    </NotificationContext.Provider>
+  );
 };
-
-export const useNotificationDisplay = () => useContext(NotificationDisplayContext);

@@ -4,6 +4,7 @@ import MunicipalitiesView from "./Barangay/MunicipalView";
 import BarangayView from "./Barangay/BarangayView";
 import RegisterBarangayForm from "../RegisterBarangay";
 import { MunicipalityContext } from "../../contexts/MunicipalityContext/MunicipalityContext";
+import StatusModal from "../modals/SuccessFailed/SuccessFailedModal";
 
 export default function Barangay({
   onClose,
@@ -15,56 +16,48 @@ export default function Barangay({
   fetchBarangays,
   displayBarangaysForUser,
 }) {
-  // Kunin ang municipalities mula sa Context
   const { municipalities } = useContext(MunicipalityContext);
+
+  const [statusVisible, setStatusVisible] = useState(false);
+  const [statusType, setStatusType] = useState("success");
+  const [statusMessage, setStatusMessage] = useState("");
 
   const [selectedMunicipality, setSelectedMunicipality] = useState(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // State para sa Form Modal
   const [showRegisterForm, setShowRegisterForm] = useState(false);
   const [editingBarangay, setEditingBarangay] = useState(null);
-
-  console.log("barangays", barangays);
-
-  // -------------------- RESET FORM WHEN MODAL CLOSES --------------------
   useEffect(() => {
     if (!visible) {
       resetForm();
     }
   }, [visible]);
 
-  // -------------------- PROCESS MUNICIPALITIES DATA --------------------
   const enrichedMunicipalities = useMemo(() => {
     if (municipalities && municipalities.length > 0) {
       return municipalities.map((m) => {
-        // Bilangin ang barangays na kabilang sa municipality na ito
-        const municipalityBarangays = barangays.filter(
-          (b) => b.municipality?.id === m._id || b.municipality?.name === m.municipalityName
-        );
-        
         return {
           id: m._id,
           name: m.municipalityName,
-          totalBarangays: municipalityBarangays.length,
+          totalBarangays: m.barangayCount || 0, // Galing sa back-end data
         };
       });
     }
     return [];
-  }, [municipalities, barangays]);
+  }, [municipalities]); // 'barangays' removed from dependencies as it's no longer used for the count
 
   // -------------------- FILTER LOGIC --------------------
   const filteredMunicipalities = enrichedMunicipalities.filter((m) =>
     m.name?.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Para sa listahan ng barangay sa loob ng napiling municipality
   const barangaysList = useMemo(() => {
     if (!selectedMunicipality) return [];
-    
+
     return barangays.filter(
-      (b) => 
-        b.municipality?.id === selectedMunicipality.id || 
+      (b) =>
+        b.municipality?.id === selectedMunicipality.id ||
         b.municipality?.name === selectedMunicipality.name
     );
   }, [barangays, selectedMunicipality]);
@@ -75,7 +68,6 @@ export default function Barangay({
 
   // -------------------- HANDLERS --------------------
   const onEditBarangay = (barangayData) => {
-    // Kung ang barangayData ay may nested structure
     if (barangayData.barangayData) {
       const { barangayData: barangay, municipality } = barangayData;
       setEditingBarangay({
@@ -83,10 +75,10 @@ export default function Barangay({
         municipality: municipality?.name || selectedMunicipality?.name,
       });
     } else {
-      // Kung direkta ang barangay object
       setEditingBarangay({
         ...barangayData,
-        municipality: barangayData.municipality?.name || selectedMunicipality?.name,
+        municipality:
+          barangayData.municipality?.name || selectedMunicipality?.name,
       });
     }
     setShowRegisterForm(true);
@@ -124,7 +116,17 @@ export default function Barangay({
   const handleRegisterFormSubmit = async (barangayData) => {
     try {
       if (barangayData.id) {
-        await updateBarangay(barangayData.id, barangayData);
+        const result = await updateBarangay(barangayData.id, barangayData);
+
+        console.log("result",result)
+        if (result.success) {
+          setStatusType("success");
+          setStatusMessage("Barangay Updated successfullys");
+        } else {
+          setStatusType("error");
+          setStatusMessage(result.error || "Failed to Update barangay.");
+        }
+        setStatusVisible(true);
       }
       handleRegisterFormClose();
     } catch (error) {
@@ -178,6 +180,13 @@ export default function Barangay({
             fetchBarangays={fetchBarangays}
           />
         )}
+
+        <StatusModal
+          visible={statusVisible}
+          type={statusType}
+          message={statusMessage}
+          onClose={() => setStatusVisible(false)}
+        />
       </SafeAreaView>
     </Modal>
   );

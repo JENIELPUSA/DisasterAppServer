@@ -4,8 +4,6 @@ const mongoose = require("mongoose");
 
 exports.createEvacuation = async (req, res) => {
   try {
-    console.log("req.body", req.body);
-
     const {
       evacuationName,
       location,
@@ -33,7 +31,7 @@ exports.createEvacuation = async (req, res) => {
       });
     }
 
-    // ✅ SAVE IDS ONLY
+    // SAVE IDS ONLY
     const evacuation = await Evacuation.create({
       evacuationName,
       location,
@@ -64,6 +62,7 @@ exports.createEvacuation = async (req, res) => {
 
 exports.deleteEvacuation = AsyncErrorHandler(async (req, res) => {
   const id = req.params.id;
+  const io = req.app.get("io");
 
   const barangay = await Evacuation.findById(id);
   if (!barangay) {
@@ -73,7 +72,9 @@ exports.deleteEvacuation = AsyncErrorHandler(async (req, res) => {
     });
   }
 
-  await Evacuation.findByIdAndDelete(id);
+  const removeEvacuation = await Evacuation.findByIdAndDelete(id);
+
+  io.emit("removeEvacuation:new", removeEvacuation);
 
   res.status(200).json({
     status: "success",
@@ -167,15 +168,103 @@ exports.DisplayEvacuation = AsyncErrorHandler(async (req, res) => {
   });
 });
 
+exports.DisplayEvacuationInBarangay = AsyncErrorHandler(async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
+  const { search = "", dateFrom, dateTo } = req.query;
+  const { barangayId } = req.params;
+  // Validate barangayId
+  if (!mongoose.Types.ObjectId.isValid(barangayId)) {
+    return res.status(400).json({
+      status: "error",
+      message: "Invalid barangayId",
+    });
+  }
+
+  const matchStage = {
+    barangay: new mongoose.Types.ObjectId(barangayId), // ✅ fix here
+  };
+
+  // Filter by search (Evacuation Name)
+  if (search.trim() !== "") {
+    matchStage.evacuationName = { $regex: new RegExp(search.trim(), "i") };
+  }
+
+  // Filter by date
+  if (
+    (dateFrom && dateFrom.trim() !== "") ||
+    (dateTo && dateTo.trim() !== "")
+  ) {
+    matchStage.createdAt = {};
+    if (dateFrom && dateFrom.trim() !== "")
+      matchStage.createdAt.$gte = new Date(dateFrom);
+    if (dateTo && dateTo.trim() !== "") {
+      const end = new Date(dateTo);
+      end.setDate(end.getDate() + 1); // include whole day
+      matchStage.createdAt.$lt = end;
+    }
+  }
+
+  console.log("Match Stage:", matchStage);
+
+  const pipeline = [
+    { $match: matchStage },
+    {
+      $lookup: {
+        from: "barangays",
+        localField: "barangay",
+        foreignField: "_id",
+        as: "barangay",
+      },
+    },
+    { $unwind: { path: "$barangay", preserveNullAndEmptyArrays: true } },
+    { $sort: { createdAt: -1 } },
+    {
+      $facet: {
+        data: [
+          { $skip: skip },
+          { $limit: limit },
+          {
+            $project: {
+              evacuationName: 1,
+              totalHouseholds: 1,
+              evacuationCapacity: 1,
+              location: 1,
+              contactPerson: 1,
+              isActive: 1,
+              createdAt: 1,
+              "barangay.barangayName": 1,
+              "barangay.municipality": 1,
+              "barangay.fullAddress": 1,
+              "barangay.coordinates": 1,
+            },
+          },
+        ],
+        totalCount: [{ $count: "count" }],
+      },
+    },
+  ];
+
+  const result = await Evacuation.aggregate(pipeline);
+
+  const data = result[0].data;
+  const total = result[0].totalCount[0]?.count || 0;
+
+  res.status(200).json({
+    status: "success",
+    data,
+    totalItems: total,
+    currentPage: page,
+    totalPages: Math.ceil(total / limit),
+  });
+});
+
 exports.DisplayNearbyEvacuations = async (req, res) => {
   try {
-    const municipalityId = req.user.MunicipalityId;
+    const municipalityId = new mongoose.Types.ObjectId(req.user.MunicipalityId);
     const role = req.user.role;
-
-
-    console.log("municipalityId",municipalityId)
-      console.log("role",role)
-
     const { latitude, longitude } = req.body;
 
     if (!latitude || !longitude) {
@@ -191,13 +280,12 @@ exports.DisplayNearbyEvacuations = async (req, res) => {
     const limitedRoles = ["household_lead", "brgy_captain", "household_member"];
     const isLimited = limitedRoles.includes(role);
 
-    // 🔹 Base match: lahat sa sariling municipality at active
+    // Base match
     let matchStage = {
       municipality: municipalityId,
       isActive: true,
     };
 
-    // 🔹 Only for restricted roles, filter for available capacity
     if (isLimited) {
       matchStage.$expr = { $lt: ["$totalHouseholds", "$evacuationCapacity"] };
     }
@@ -205,7 +293,7 @@ exports.DisplayNearbyEvacuations = async (req, res) => {
     const pipeline = [
       { $match: matchStage },
 
-      // 🔹 Compute distance (Haversine)
+      // Compute distance
       {
         $addFields: {
           distance: {
@@ -245,13 +333,36 @@ exports.DisplayNearbyEvacuations = async (req, res) => {
         },
       },
 
-      // 🔹 Sort nearest first
+      // 🔹 Lookup sa Tracking para sa total evacuees
+      {
+        $lookup: {
+          from: "trackings",
+          localField: "_id",
+          foreignField: "evacuationId",
+          as: "trackingData",
+        },
+      },
+      {
+        $addFields: {
+          totalEvacuates: {
+            $size: {
+              $filter: {
+                input: "$trackingData",
+                as: "t",
+                cond: { $eq: ["$$t.scanType", "check_in"] },
+              },
+            },
+          },
+        },
+      },
+
+      // Sort nearest first
       { $sort: { distance: 1, createdAt: -1 } },
 
-      // 🔹 Limit only for restricted roles
+      // Limit for restricted roles
       ...(isLimited ? [{ $limit: 1 }] : []),
 
-      // 🔹 Project only evacuation fields
+      // Project fields
       {
         $project: {
           evacuationName: 1,
@@ -261,6 +372,7 @@ exports.DisplayNearbyEvacuations = async (req, res) => {
           contactPerson: 1,
           isActive: 1,
           distance: 1,
+          totalEvacuates: 1, // **idagdag dito**
         },
       },
     ];
@@ -300,7 +412,6 @@ exports.DisplayOneEvacuation = AsyncErrorHandler(async (req, res) => {
 
 exports.updateEvacuation = AsyncErrorHandler(async (req, res) => {
   try {
-    console.log("PassData", req.body);
     const id = req.params.id;
 
     const barangay = await Evacuation.findById(id);
@@ -368,3 +479,71 @@ exports.toggleEvacuationStatus = AsyncErrorHandler(async (req, res) => {
     data: barangay,
   });
 });
+
+exports.DisplayAllEvacuationInMunicipality = async (req, res) => {
+  try {
+    const municipalityId = new mongoose.Types.ObjectId(req.user.MunicipalityId);
+
+    const pipeline = [
+      {
+        $match: {
+          municipality: municipalityId,
+          isActive: true,
+        },
+      },
+      {
+        // join sa Tracking collection
+        $lookup: {
+          from: "trackings", // pangalan ng Tracking collection sa DB
+          localField: "_id", // Evacuation _id
+          foreignField: "evacuationId", // field sa Tracking
+          as: "trackingData",
+        },
+      },
+      {
+        // bilangin ang total evacuees per evacuation
+        $addFields: {
+          totalEvacuates: {
+            $size: {
+              $filter: {
+                input: "$trackingData",
+                as: "t",
+                cond: { $eq: ["$$t.scanType", "check_in"] }, // count lang check_in
+              },
+            },
+          },
+        },
+      },
+      {
+        $sort: { createdAt: -1 }, // newest first
+      },
+      {
+        // pipiliin lang yung fields na gusto mo ipakita
+        $project: {
+          evacuationName: 1,
+          totalHouseholds: 1,
+          evacuationCapacity: 1,
+          location: 1,
+          contactPerson: 1,
+          isActive: 1,
+          municipality: 1,
+          totalEvacuates: 1, // **dagdag dito**
+        },
+      },
+    ];
+
+    const result = await Evacuation.aggregate(pipeline);
+
+    res.status(200).json({
+      status: "success",
+      totalItems: result.length,
+      data: result,
+    });
+  } catch (error) {
+    console.error("DisplayAllEvacuationInMunicipality Error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Server error",
+    });
+  }
+};

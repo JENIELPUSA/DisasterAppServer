@@ -1,6 +1,7 @@
 const Barangay = require("../Models/Barangay");
 const mongoose = require("mongoose");
 const AsyncErrorHandler = require("../Utils/AsyncErrorHandler");
+
 exports.createBarangay = AsyncErrorHandler(async (req, res) => {
   try {
     const { barangayName, municipality, coordinates, fullAddress } = req.body;
@@ -94,7 +95,7 @@ exports.displayOneBarangay = AsyncErrorHandler(async (req, res) => {
 // Update Barangay
 exports.updateBarangay = AsyncErrorHandler(async (req, res) => {
   const id = req.params.id;
-
+  const io = req.app.get("io");
   const barangay = await Barangay.findById(id);
   if (!barangay) {
     return res.status(404).json({
@@ -125,6 +126,8 @@ exports.updateBarangay = AsyncErrorHandler(async (req, res) => {
     runValidators: true,
   });
 
+  io.emit("UpdateBarangay:new", updatedBarangay);
+
   res.status(200).json({
     status: "success",
     message: "Barangay updated successfully.",
@@ -135,7 +138,7 @@ exports.updateBarangay = AsyncErrorHandler(async (req, res) => {
 // Delete Barangay
 exports.deleteBarangay = AsyncErrorHandler(async (req, res) => {
   const id = req.params.id;
-
+  const io = req.app.get("io");
   const barangay = await Barangay.findById(id);
   if (!barangay) {
     return res.status(404).json({
@@ -144,7 +147,9 @@ exports.deleteBarangay = AsyncErrorHandler(async (req, res) => {
     });
   }
 
-  await Barangay.findByIdAndDelete(id);
+  const update = await Barangay.findByIdAndDelete(id);
+
+  io.emit("DeletedBarangay:new", update);
 
   res.status(200).json({
     status: "success",
@@ -287,4 +292,3 @@ exports.dropdownbarangayformaps = AsyncErrorHandler(async (req, res) => {
     totalPages: Math.ceil(total / limitNum),
   });
 });
-

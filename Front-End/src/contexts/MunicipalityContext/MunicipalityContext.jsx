@@ -16,6 +16,7 @@ export const MunicipalityProvider = ({ children }) => {
     setLoading(true);
     try {
       const res = await axios.get(`${backendUrl}/api/v1/Municipality`);
+      console.log("res.data.data",res.data.data)
       setMunicipalities(res.data.data || []);
     } catch (err) {
       console.error("Fetch Municipalities Error:", err);

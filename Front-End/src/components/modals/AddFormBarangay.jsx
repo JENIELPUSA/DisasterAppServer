@@ -11,11 +11,16 @@ import {
 } from "react-native";
 import MapLibreGL from "@maplibre/maplibre-react-native";
 import { styled } from "nativewind";
+import StatusModal from "../modals/SuccessFailed/SuccessFailedModal";
 
 const StyledView = styled(View);
 const StyledText = styled(Text);
 const StyledTextInput = styled(TextInput);
 const StyledTouchableOpacity = styled(TouchableOpacity);
+
+  const [statusVisible, setStatusVisible] = useState(false);
+  const [statusType, setStatusType] = useState("success");
+  const [statusMessage, setStatusMessage] = useState("");
 
 export default function BarangayRegistrationForm({registerBarangay, setRegisterBarangay}) {
   const [barangayName, setBarangayName] = useState("");
@@ -81,7 +86,7 @@ export default function BarangayRegistrationForm({registerBarangay, setRegisterB
     };
 
     console.log("Registered Barangay:", newBarangay);
-    alert("Barangay registered successfully!");
+    alert("Barangay registered successfully");
     setBarangayName("");
     setCaptainName("");
     setQuery("");
@@ -172,5 +177,12 @@ export default function BarangayRegistrationForm({registerBarangay, setRegisterB
         </StyledTouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
+    
   );
+  <StatusModal
+          visible={statusVisible}
+          type={statusType}
+          message={statusMessage}
+          onClose={() => setStatusVisible(false)}
+        />
 }

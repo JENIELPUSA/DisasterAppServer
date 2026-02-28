@@ -290,17 +290,11 @@ exports.signup = AsyncErrorHandler(async (req, res) => {
           });
         }
 
-        verificationCode = Math.random()
-          .toString(36)
-          .substr(2, 6)
-          .toUpperCase();
-
         linkedRecord = await HouseholdMember.create({
           userId: newUser._id,
           householdLeadId,
           relationship,
           householdLeadName,
-          verificationCode,
           disability,
           birthDate,
           isVerified: false,

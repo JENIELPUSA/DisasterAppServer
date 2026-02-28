@@ -15,7 +15,7 @@ export const HouseholdProvider = ({ children }) => {
   const { authToken, logout, user } = useContext(AuthContext);
   const [householdLeads, setHouseholdLeads] = useState([]);
   const [totalHouseholdLeads, setTotalHouseholdLeads] = useState(0);
-  const [error, setError] = useState(null); // ✅ Added error state
+  const [error, setError] = useState(null); //Added error state
   const [householdMembers, setHouseholdMembers] = useState([]);
   const [NotifyLeadRescue, setNotifyLeadRescue] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -25,6 +25,7 @@ export const HouseholdProvider = ({ children }) => {
   const [barangayFilter, setBarangayFilter] = useState("");
   const [DropdowndataLead, setDropdownLead] = useState("");
   const [PinpointHousehold, setPinpointHousehold] = useState("");
+  const [householdWithMembers, setHouseholdWithMembers] = useState(null);
   const backendUrl = Constants.expoConfig.extra.apiUrl;
 
   const handleError = (error) => {
@@ -41,7 +42,7 @@ export const HouseholdProvider = ({ children }) => {
 
         const res = await axios.get(
           `${backendUrl}/api/v1/HouseholdLead/DropdownAllHouseHold`,
-          { params }
+          { params },
         );
         return res.data.data || [];
       } catch (error) {
@@ -49,7 +50,7 @@ export const HouseholdProvider = ({ children }) => {
         return [];
       }
     },
-    [backendUrl]
+    [backendUrl],
   );
 
   const fetchHouseholdLeads = useCallback(
@@ -95,8 +96,28 @@ export const HouseholdProvider = ({ children }) => {
         setLoading(false);
       }
     },
-    [authToken, backendUrl, search]
+    [authToken, backendUrl, search],
   );
+
+  const fetchHouseholdWithMembers = useCallback(async () => {
+    if (!authToken) return;
+
+    try {
+      setLoading(true);
+      const res = await axios.get(
+        `${backendUrl}/api/v1/HouseholdLead/getHouseholdWithMembers`,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        },
+      );
+
+      setHouseholdWithMembers(res.data.data || null);
+    } catch (error) {
+      handleError(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [authToken, backendUrl]);
 
   // Create household lead profile
   const createHouseholdLeadProfile = async (values) => {
@@ -106,7 +127,7 @@ export const HouseholdProvider = ({ children }) => {
         values,
         {
           headers: { Authorization: `Bearer ${authToken}` },
-        }
+        },
       );
 
       if (res.data.success) {
@@ -130,7 +151,7 @@ export const HouseholdProvider = ({ children }) => {
         values,
         {
           headers: { Authorization: `Bearer ${authToken}` },
-        }
+        },
       );
 
       if (res.data.success) {
@@ -155,7 +176,7 @@ export const HouseholdProvider = ({ children }) => {
         `${backendUrl}/api/household-member/profile`,
         {
           headers: { Authorization: `Bearer ${authToken}` },
-        }
+        },
       );
       return res.data.data;
     } catch (error) {
@@ -172,7 +193,7 @@ export const HouseholdProvider = ({ children }) => {
         values,
         {
           headers: { Authorization: `Bearer ${authToken}` },
-        }
+        },
       );
 
       if (res.data.success) {
@@ -199,7 +220,7 @@ export const HouseholdProvider = ({ children }) => {
         },
         {
           headers: { Authorization: `Bearer ${authToken}` },
-        }
+        },
       );
 
       if (res.data.success) {
@@ -223,7 +244,7 @@ export const HouseholdProvider = ({ children }) => {
         `${backendUrl}/api/household-member/${memberId}`,
         {
           headers: { Authorization: `Bearer ${authToken}` },
-        }
+        },
       );
 
       if (res.data.success) {
@@ -265,7 +286,7 @@ export const HouseholdProvider = ({ children }) => {
           `${backendUrl}/api/v1/HouseholdLead/DropdownAllHouseHold`,
           {
             params: { barangay: barangayId },
-          }
+          },
         );
 
         setDropdownLead(res.data.data || []);
@@ -275,7 +296,7 @@ export const HouseholdProvider = ({ children }) => {
         setLoading(false);
       }
     },
-    [backendUrl]
+    [backendUrl],
   );
 
   const getHouseholdLeadsByBarangayId = useCallback(
@@ -294,7 +315,7 @@ export const HouseholdProvider = ({ children }) => {
           {
             headers: { Authorization: `Bearer ${authToken}` },
             params, // optional, if your backend supports pagination
-          }
+          },
         );
 
         // Destructure like fetchEvacuation example
@@ -313,7 +334,7 @@ export const HouseholdProvider = ({ children }) => {
         setLoading(false);
       }
     },
-    [authToken, backendUrl]
+    [authToken, backendUrl],
   );
 
   useEffect(() => {
@@ -342,7 +363,7 @@ export const HouseholdProvider = ({ children }) => {
           {
             params,
             headers: { Authorization: `Bearer ${authToken}` },
-          }
+          },
         );
 
         const { data = [] } = res.data;
@@ -354,7 +375,7 @@ export const HouseholdProvider = ({ children }) => {
         setLoading(false);
       }
     },
-    [authToken, backendUrl]
+    [authToken, backendUrl],
   );
 
   return (
@@ -385,6 +406,8 @@ export const HouseholdProvider = ({ children }) => {
         NotifyLeadRescue,
         getHouseholdLeadsByBarangayId,
         PinpointHousehold,
+        fetchHouseholdWithMembers,
+        householdWithMembers
       }}
     >
       {children}

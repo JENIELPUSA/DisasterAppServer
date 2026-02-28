@@ -12,12 +12,14 @@ const AdminRoute = require("./Routes/AdminRoute");
 const Notification = require("./Routes/NotificationRoute");
 const Logs = require("./Routes/LogsRoute");
 const authentic = require("./Routes/authRouter");
-const Organizer = require("./Routes/OrganizerRoute");
 const Evacuation = require("./Routes/EvacuationRoute");
 const Barangay = require("./Routes/BarangayRoute");
 const HouseholdLead = require("./Routes/HouseholdLead");
-const HouseholdMember = require("./Routes/HouseholdRoute")
-const Municipality = require("./Routes/MunicipalityRoute")
+const HouseholdMember = require("./Routes/HouseholdRoute");
+const Municipality = require("./Routes/MunicipalityRoute");
+const Incident = require("./Routes/floodReportRoutes");
+const NasirangBahayReport = require("./Routes/nasirangBahayRoute");
+const TrackingEvacuates = require("./Routes/TrackingRoute");
 let app = express();
 
 const logger = function (req, res, next) {
@@ -44,15 +46,15 @@ app.use(
       sameSite: "none",
       maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
     },
-  })
+  }),
 );
 app.use(
   cors({
-     origin: true,
+    origin: true,
     //origin: process.env.FRONTEND_URL,
     methods: ["GET", "POST", "PATCH", "DELETE"],
     credentials: true,
-  })
+  }),
 );
 
 app.use(logger);
@@ -68,14 +70,14 @@ app.use("/api/v1/authentication", authentic);
 app.use("/api/v1/Admin", AdminRoute);
 app.use("/api/v1/Notification", Notification);
 app.use("/api/v1/LogsAudit", Logs);
-app.use("/api/v1/Organizer", Organizer);
 app.use("/api/v1/Evacuation", Evacuation);
 app.use("/api/v1/Barangay", Barangay);
 app.use("/api/v1/Municipality", Municipality);
 app.use("/api/v1/HouseholdLead", HouseholdLead);
 app.use("/api/v1/HouseholdMember", HouseholdMember);
-
-
+app.use("/api/v1/IncidentReport", Incident);
+app.use("/api/v1/NasirangBahayReport", NasirangBahayReport);
+app.use("/api/v1/TrackingEvacuates", TrackingEvacuates);
 
 app.use(ErrorController);
 

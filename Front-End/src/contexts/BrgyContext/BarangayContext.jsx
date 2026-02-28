@@ -114,53 +114,51 @@ export const BarangayDisplayProvider = ({ children }) => {
     [authToken]
   );
 
- const displayDropdownInMaps = useCallback(
-  async (search = "", page = "") => {
-    if (!authToken) return;
+  const displayDropdownInMaps = useCallback(
+    async (search = "", page = "") => {
+      if (!authToken) return;
 
-    try {
-      setLoading(true);
+      try {
+        setLoading(true);
 
-      const params = new URLSearchParams();
-      
-      const searchText = typeof search === "string" ? search.trim() : "";
-      const pageText = typeof page === "string" ? page.trim() : page.toString().trim();
-      
-      if (searchText.length > 0) params.append("search", searchText);
-      if (pageText.length > 0) params.append("page", pageText);
+        const params = new URLSearchParams();
 
-      const queryString = params.toString();
-      
-      const url = `${backendUrl}/api/v1/Barangay/dropdownbarangayformaps${
-        queryString ? `?${queryString}` : ""
-      }`;
+        const searchText = typeof search === "string" ? search.trim() : "";
+        const pageText =
+          typeof page === "string" ? page.trim() : page.toString().trim();
 
-      const res = await axios.get(
-        url,
-        {
+        if (searchText.length > 0) params.append("search", searchText);
+        if (pageText.length > 0) params.append("page", pageText);
+
+        const queryString = params.toString();
+
+        const url = `${backendUrl}/api/v1/Barangay/dropdownbarangayformaps${
+          queryString ? `?${queryString}` : ""
+        }`;
+
+        const res = await axios.get(url, {
           headers: {
             Authorization: `Bearer ${authToken}`,
             "Cache-Control": "no-cache",
           },
-        }
-      );
+        });
 
-      const {
-        data,
-        totalItems,
-        currentPage: resCurrentPage,
-        totalPages: resTotalPages,
-      } = res.data;
+        const {
+          data,
+          totalItems,
+          currentPage: resCurrentPage,
+          totalPages: resTotalPages,
+        } = res.data;
 
-      setdropdownhousehold(data || []);
-    } catch (error) {
-      handleError(error);
-    } finally {
-      setLoading(false);
-    }
-  },
-  [authToken]
-);
+        setdropdownhousehold(data || []);
+      } catch (error) {
+        handleError(error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authToken]
+  );
 
   const fetchBarangayDropdown = useCallback(
     async (search = "", page = 1) => {
@@ -215,20 +213,24 @@ export const BarangayDisplayProvider = ({ children }) => {
 
   // Add / Delete / Update / Toggle / Get functions
   const addBarangay = async (values) => {
-    console.log("valuesContext", values);
     try {
       const res = await axios.post(`${backendUrl}/api/v1/Barangay`, values, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
 
-      if (res.data.status === "success") {
-        fetchBarangays(currentPage);
-        return { success: true, data: res.data.data };
+      if (res.data?.status === "success") {
+        return { success: true };
       } else {
-        return {
-          success: false,
-          error: res.data.message || "Failed to add barangay",
-        };
+        // Kunin ang message mula sa server response kung meron
+        const message =
+          res.data?.message ||
+          res.data?.error ||
+          "Unexpected response from server.";
+
+        setCustomError(message);
+        setModalStatus("failed");
+        setShowModal(true);
+        return { success: false, error: message };
       }
     } catch (error) {
       const serverMessage = error.response?.data?.message;
@@ -249,11 +251,19 @@ export const BarangayDisplayProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${authToken}` },
       });
 
-      if (res.data.status === "success") {
-        fetchBarangays(currentPage);
-        return { success: true };
+      if (res.data?.status === "success") {
+        return { success: true, data: res.data.data };
       } else {
-        throw new Error(res.data.message || "Failed to delete barangay");
+        // Kunin ang message mula sa server response kung meron
+        const message =
+          res.data?.message ||
+          res.data?.error ||
+          "Unexpected response from server.";
+
+        setCustomError(message);
+        setModalStatus("failed");
+        setShowModal(true);
+        return { success: false, error: message };
       }
     } catch (error) {
       handleError(error);
@@ -271,11 +281,19 @@ export const BarangayDisplayProvider = ({ children }) => {
         }
       );
 
-      if (res.data.status === "success") {
-        fetchBarangays(currentPage);
-        return { success: true, data: res.data.data };
+      if (res.data?.status === "success") {
+        return { success: true };
       } else {
-        throw new Error(res.data.message || "Failed to update barangay");
+        // Kunin ang message mula sa server response kung meron
+        const message =
+          res.data?.message ||
+          res.data?.error ||
+          "Unexpected response from server.";
+
+        setCustomError(message);
+        setModalStatus("failed");
+        setShowModal(true);
+        return { success: false, error: message };
       }
     } catch (error) {
       handleError(error);

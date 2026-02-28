@@ -1,4 +1,3 @@
-
 export const analyticalReportsData = {
   evacuationSummary: {
     totalEvacuated: 1250,
@@ -289,64 +288,74 @@ export const educationalVideos = [
 ];
 
 export const menuItems = [
-  { id: 2, title: "View Households", icon: "people-outline", color: "#10B981",roles: ['rescuer', 'brgy_captain','admin'] },
+  {
+    id: 1,
+    title: "Typhone Compilation",
+    icon: "folder-outline",
+    color: "#06B6D4",
+    roles: ["household_lead", "brgy_captain", "household_member"],
+  },
+  {
+    id: 2,
+    title: "Add LandMark",
+    icon: "location-outline",
+    color: "#06B6D4",
+    roles: [
+      "rescuer",
+      "household_lead",
+      "brgy_captain",
+      "household_member",
+      "admin",
+    ],
+  },
   {
     id: 3,
     title: "Report Nasirang Bahay",
     icon: "home-outline",
-    color: "#EF4444",
-    roles: ['rescuer', 'household_lead', 'brgy_captain', 'household_member','admin']
+    color: "#06B6D4",
+    roles: [
+      "household_lead",
+      "brgy_captain",
+      "household_member",
+      "admin",
+    ],
   },
   {
     id: 4,
-    title: "Report Baha sa Daan",
+    title: "Report Incident",
     icon: "water-outline",
     color: "#06B6D4",
-    roles: ['rescuer', 'household_lead', 'brgy_captain', 'household_member','admin']
+    roles: ["rescuer", "brgy_captain", "admin","household_member","household_lead"],
   },
-  {
-    id: 5,
-    title: "View Reports",
-    icon: "document-text-outline",
-    color: "#8B5CF6",
-    roles: ['rescuer', 'brgy_captain', 'admin']
-  },
+
   {
     id: 6,
-    title: "Analyze Damage",
-    icon: "analytics-outline",
-    color: "#F59E0B",
-    roles: ['rescuer', 'brgy_captain', 'admin']
+    title: "QR Code Scanner",
+    icon: "barcode-outline",
+    color: "#06B6D4",
+    roles: ["admin", "brgy_captain","rescuer"],
   },
   {
     id: 7,
-    title: "Damage Severity",
-    icon: "bar-chart-outline",
-    color: "#EC4899",
-    roles: ['rescuer','brgy_captain', 'admin']
+    title: "Member Of Family",
+    icon: "people-outline",
+    color: "#06B6D4",
+    roles: ["household_lead"],
   },
   {
     id: 8,
-    title: "Mark Flood Areas",
-    icon: "location-outline",
-    color: "#0EA5E9",
-    roles: ['rescuer','brgy_captain','admin']
+    title: "View Household Report",
+    icon: "people-outline",
+    color: "#06B6D4",
+    roles: ["admin"],
   },
-  { id: 9, title: "Road Passability", icon: "car-outline", color: "#84CC16" },
-  { id: 10, title: "View Safe Routes", icon: "map-outline", color: "#6366F1" },
-  {
-    id: 11,
-    title: "Analytical Reports",
-    icon: "stats-chart-outline",
-    color: "#8B5CF6",
-    roles: ['rescuer', 'brgy_captain','admin']
-  },
+  { id: 10, title: "View Safe Routes", icon: "map-outline", color: "#06B6D4" },
   {
     id: 12,
     title: "View Barangay",
     icon: "business-outline",
-    color: "#6366F1",
-    roles: ['rescuer', 'brgy_captain','admin']
+    color: "#06B6D4",
+    roles: ["admin"],
   },
 ];
 

@@ -439,15 +439,6 @@ const EvacuationForm = ({
       processedData._id = editingEvacuation._id;
     }
 
-    // Console log the data being sent
-    console.log("=== EVACUATION FORM DATA TO BE SUBMITTED ===");
-    console.log("Form Data:", processedData);
-    console.log("Municipality ID:", municipalityId);
-    console.log("Selected Municipality:", selectedMunicipalityState);
-    console.log("Selected Barangay:", selectedBarangay);
-    console.log("Editing Mode:", editingEvacuation ? "Yes" : "No");
-    console.log("===========================================");
-
     Alert.alert(
       "Success",
       `Evacuation center "${processedData.evacuationName}" has been ${

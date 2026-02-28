@@ -191,16 +191,6 @@ export const AuthProvider = ({ children }) => {
             "familyMembers",
             formData.familyMembers ? formData.familyMembers.toString() : "1"
           );
-
-          // GPS COORDINATES - REQUIRED FOR HOUSEHOLD LEAD
-          console.log("Checking GPS data for household_lead:", {
-            hasLatLong: !!(formData.latitude && formData.longitude),
-            hasGpsCoordinates: !!formData.gpsCoordinates,
-            latitude: formData.latitude,
-            longitude: formData.longitude,
-            gpsCoordinates: formData.gpsCoordinates,
-          });
-
           // Priority 1: Separate latitude and longitude
           if (formData.latitude && formData.longitude) {
             console.log(
@@ -371,14 +361,7 @@ export const AuthProvider = ({ children }) => {
         }
 
         return {
-          success: true,
-          message: res.data.message,
-          verificationRequired: verificationRequired || false,
-          data: {
-            user,
-            roleProfile,
-            token,
-          },
+          success: true
         };
       } else {
         return {

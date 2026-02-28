@@ -129,7 +129,9 @@ exports.getUserProfileByPosition = AsyncErrorHandler(async (req, res) => {
       position: position,
       termFrom: { $lte: currentYear },
       termTo: { $gte: currentYear },
-    }).sort({ termFrom: -1 });
+    })
+      .sort({ termFrom: -1 })
+      .select("-verificationCode"); // <-- exclude verificationCode
 
     if (!profile) {
       return res.status(404).json({
@@ -151,6 +153,7 @@ exports.getUserProfileByPosition = AsyncErrorHandler(async (req, res) => {
     });
   }
 });
+
 
 exports.updateUserProfile = AsyncErrorHandler(async (req, res) => {
   try {

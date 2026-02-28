@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import LoginScreen from "../components/modals/Login/LoginScreen";
 import RegistrationWizard from "../components/modals/Registration/RegistrationWizard";
+import StatusModal from "../components/modals/SuccessFailed/SuccessFailedModal";
 
 export default function LoginForm({
   slide,
@@ -55,6 +56,10 @@ export default function LoginForm({
     useState(false);
   const [isLoadingHouseholdLeads, setIsLoadingHouseholdLeads] = useState(false);
 
+  const [statusVisible, setStatusVisible] = useState(false);
+  const [statusType, setStatusType] = useState("success");
+  const [statusMessage, setStatusMessage] = useState("");
+
   const [registrationData, setRegistrationData] = useState({
     fullName: "",
     contactNumber: "",
@@ -82,6 +87,14 @@ export default function LoginForm({
   const prevBarangayIdRef = useRef(null);
   const prevSelectedRoleRef = useRef(null);
   const shouldShowNoLeadsAlertRef = useRef(true);
+
+  // Handle status modal close
+  const handleStatusClose = () => {
+    setStatusVisible(false);
+
+    setShowLogin(true);
+    resetRegistrationForm();
+  };
 
   // Roles and relationships
   const roles = [
@@ -351,9 +364,11 @@ export default function LoginForm({
   const validateStep = () => {
     switch (currentStep) {
       case 1:
-        if (!registrationData.fullName || 
-            !registrationData.contactNumber || 
-            !registrationData.municipality) {
+        if (
+          !registrationData.fullName ||
+          !registrationData.contactNumber ||
+          !registrationData.municipality
+        ) {
           Alert.alert(
             "Validation Error",
             "Please fill in required personal information fields including municipality"
@@ -447,8 +462,6 @@ export default function LoginForm({
 
     setIsSignupLoading(true);
 
-    console.log("registrationData", registrationData);
-
     try {
       const formData = {
         fullName: registrationData.fullName,
@@ -530,56 +543,13 @@ export default function LoginForm({
       const result = await signup(formData);
 
       if (result.success) {
-        if (
-          selectedRole?.value === "brgy_captain" &&
-          isRegisteringNewBarangay
-        ) {
-          Alert.alert(
-            "Registration Successful!",
-            `Your account has been created and "${newBarangayName}" will be added to the system after verification.\n\nPlease check your email for further instructions.`,
-            [
-              {
-                text: "OK",
-                onPress: () => {
-                  handleBackToLogin();
-                },
-              },
-            ]
-          );
-        } else if (result.verificationRequired) {
-          Alert.alert(
-            "Registration Successful",
-            result.message ||
-              "Please wait for verification from your household lead.",
-            [
-              {
-                text: "OK",
-                onPress: () => {
-                  handleBackToLogin();
-                },
-              },
-            ]
-          );
-        } else {
-          Alert.alert(
-            "Registration Successful",
-            result.message || "Your account has been created successfully!",
-            [
-              {
-                text: "OK",
-                onPress: () => {
-                  handleBackToLogin();
-                },
-              },
-            ]
-          );
-        }
+        setStatusType("success");
+        setStatusMessage("Successfully Sent Your Damage Report");
       } else {
-        Alert.alert(
-          "Registration Failed",
-          result.message || "Something went wrong. Please try again."
-        );
+        setStatusType("error");
+        setStatusMessage(result.error || "Failed to Send Your Report.");
       }
+      setStatusVisible(true);
     } catch (error) {
       console.error("Registration error:", error);
       Alert.alert("Error", "An unexpected error occurred. Please try again.");
@@ -1086,6 +1056,12 @@ export default function LoginForm({
           municipalities={municipalities}
         />
       )}
+      <StatusModal
+        visible={statusVisible}
+        type={statusType}
+        message={statusMessage}
+        onClose={handleStatusClose}
+      />
 
       {/* Dropdown Modals */}
       {renderBarangayDropdown()}

@@ -1,19 +1,15 @@
 const express = require('express');
 const authController = require('../Controller/authController');
+const { upload } = require("../middleware/multer"); // Destructured import
 const router = express.Router();
-const upload = require("../middleware/imageUploader");
-router.route('/signup')
-.post(upload.single("avatar"),authController.signup);
 
-router.route('/login')
-.post(authController.login);
+router.post('/signup', upload.single("avatar"), authController.signup);
+router.post('/login', authController.login);
+router.post('/forgotPassword', authController.forgotPassword);
+router.patch('/resetPassword/:token', authController.resetPassword);
 
-router.route('/forgotPassword').post(
-    authController.forgotPassword
-);
-router.route('/resetPassword/:token')
-.patch(authController.resetPassword)
-router.route('/updatePassword')
-.patch(authController.protect,authController.updatePassword)
+// Protected routes
+router.use(authController.protect);
+router.patch('/updatePassword', authController.updatePassword);
 
 module.exports = router;

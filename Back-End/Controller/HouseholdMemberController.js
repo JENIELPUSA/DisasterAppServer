@@ -71,7 +71,6 @@ exports.createHouseholdMember = AsyncErrorHandler(async (req, res) => {
       relationship,
       householdAddress,
       householdLeadName,
-      verificationCode,
       isVerified: false,
     });
 
@@ -85,7 +84,7 @@ exports.createHouseholdMember = AsyncErrorHandler(async (req, res) => {
 
     // Populate details
     const populatedHouseholdMember = await HouseholdMember.findById(
-      newHouseholdMember._id
+      newHouseholdMember._id,
     )
       .populate("userId", "fullName email contactNumber address")
       .populate("householdLeadId", "householdCode familyMembers totalMembers");
@@ -169,7 +168,7 @@ exports.getHouseholdMemberByUserId = AsyncErrorHandler(async (req, res) => {
 
     // Get household lead details
     const householdLead = await HouseholdLead.findById(
-      householdMember.householdLeadId
+      householdMember.householdLeadId,
     ).populate("userId", "fullName email contactNumber address barangay");
 
     res.status(200).json({
@@ -209,7 +208,7 @@ exports.getHouseholdMembers = AsyncErrorHandler(async (req, res) => {
 
     // Get household lead with user details
     const householdLead = await HouseholdLead.findById(
-      householdLeadId
+      householdLeadId,
     ).populate({
       path: "userId",
       select: "fullName email contactNumber address barangay",
@@ -338,7 +337,7 @@ exports.updateHouseholdMember = AsyncErrorHandler(async (req, res) => {
         const updatedUser = await UserLogin.findByIdAndUpdate(
           userId,
           { $set: userUpdateData },
-          { new: true, runValidators: true }
+          { new: true, runValidators: true },
         );
       } else {
         console.log("❌ UserLogin with this ID does not exist.");
@@ -351,7 +350,7 @@ exports.updateHouseholdMember = AsyncErrorHandler(async (req, res) => {
   ================================ */
   const updatedData = await HouseholdMember.findById(memberId).populate(
     "userId",
-    "fullName contactNumber address"
+    "fullName contactNumber address",
   );
 
   res.status(200).json({
@@ -364,7 +363,6 @@ exports.updateHouseholdMember = AsyncErrorHandler(async (req, res) => {
 exports.requestRescueByMember = async (req, res) => {
   const userId = req.user.linkId; // UserLogin._id
   let { rescueStatus } = req.body;
-  console.log("rescueStatus",rescueStatus)
   // Validation
   if (!rescueStatus) {
     return res.status(400).json({ message: "rescueStatus is required" });
@@ -375,7 +373,7 @@ exports.requestRescueByMember = async (req, res) => {
   if (!validStatuses.includes(rescueStatus)) {
     return res.status(400).json({
       message: `Invalid rescue status. Must be one of: ${validStatuses.join(
-        ", "
+        ", ",
       )}`,
     });
   }
@@ -421,11 +419,12 @@ exports.requestRescueByMember = async (req, res) => {
     const updatedLead = await HouseholdLead.findByIdAndUpdate(
       lead._id,
       { rescueStatus, updatedAt: new Date() },
-      { new: true } // return updated document
+      { new: true }, // return updated document
     );
 
     // Response
     res.status(200).json({
+      status: "success",
       message: `Rescue status updated from ${previousStatus} to ${rescueStatus}`,
       householdCode: updatedLead.householdCode,
       previousStatus,

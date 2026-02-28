@@ -17,9 +17,8 @@ const ProfilePanel = ({
   handleShareQR,
   handleSaveQR,
   profilePanelTranslateX,
-  profile
+  profile,
 }) => {
- 
   if (!profilePanelVisible) return null;
 
   // Extract data from the profile object
@@ -29,24 +28,37 @@ const ProfilePanel = ({
     contactNumber: profile?.contactNumber || "N/A",
     email: profile?.username || "N/A",
     address: profile?.address || "N/A",
-    // QR Data - using verification code from householdMember
-    qrData: profile?.householdMember?.verificationCode || 
-            profile?._id || 
-            "default-qr-data",
+
+    // ✅ ITO ANG IMPORTANTE: Gamitin ang userId, hindi verification code
+    // QR Data - using USER ID not verification code
+    qrData: profile?._id || profile?.userId, // Gamitin ang userId mismo
+
     // For account information
-    accountCreated: profile?.createdAt ? 
-      new Date(profile.createdAt).toLocaleDateString() : "N/A",
-    lastLogin: profile?.updatedAt ? 
-      new Date(profile.updatedAt).toLocaleDateString() : "Recently",
+    accountCreated: profile?.createdAt
+      ? new Date(profile.createdAt).toLocaleDateString()
+      : "N/A",
+    lastLogin: profile?.updatedAt
+      ? new Date(profile.updatedAt).toLocaleDateString()
+      : "Recently",
+
     // Household information
     householdCode: profile?.householdLead?.householdCode || "N/A",
     householdStatus: profile?.householdLead?.rescueStatus || "N/A",
     relationship: profile?.householdMember?.relationship || "N/A",
-    // For profile image - you might want to add this to your backend
-    profileImage: "https://via.placeholder.com/150", // Default placeholder
+
+    // User ID for reference
+    userId: profile?._id || "N/A",
+
+    // For profile image
+    profileImage: "https://via.placeholder.com/150",
   };
 
-   console.log("userProfile",userProfile)
+  console.log("userProfile", userProfile);
+  console.log("QR Code will contain:", userProfile.qrData);
+  console.log(
+    "Is this a valid user ID?",
+    /^[0-9a-fA-F]{24}$/.test(userProfile.qrData),
+  );
 
   return (
     <Animated.View
@@ -93,6 +105,9 @@ const ProfilePanel = ({
         <View className="items-center mb-6">
           <Text className="text-gray-800 text-lg font-bold mb-3 text-center">
             Scan QR Code for Identification
+          </Text>
+          <Text className="text-gray-600 text-sm mb-3 text-center">
+            Contains User ID: {userProfile.userId.substring(0, 12)}...
           </Text>
 
           {/* Clickable QR Code */}
@@ -153,6 +168,25 @@ const ProfilePanel = ({
             </View>
           </View>
 
+          {/* User ID Display */}
+          <View className="bg-gray-100 rounded-xl p-4">
+            <Text className="text-gray-800 font-bold mb-3">
+              User Identification
+            </Text>
+            <View className="space-y-2">
+              <View className="flex-row justify-between">
+                <Text className="text-gray-600">User ID</Text>
+                <Text className="text-gray-800 font-medium text-xs">
+                  {userProfile.userId}
+                </Text>
+              </View>
+              <View className="flex-row justify-between">
+                <Text className="text-gray-600">QR Contains</Text>
+                <Text className="text-gray-800 font-medium">User ID</Text>
+              </View>
+            </View>
+          </View>
+
           {/* Household Information */}
           <View className="bg-gray-100 rounded-xl p-4">
             <Text className="text-gray-800 font-bold mb-3">
@@ -168,11 +202,15 @@ const ProfilePanel = ({
               <View className="flex-row justify-between">
                 <Text className="text-gray-600">Rescue Status</Text>
                 <View className="flex-row items-center">
-                  <View className={`w-2 h-2 rounded-full mr-2 ${
-                    userProfile.householdStatus === 'rescued' ? 'bg-green-500' : 
-                    userProfile.householdStatus === 'pending' ? 'bg-yellow-500' : 
-                    'bg-red-500'
-                  }`} />
+                  <View
+                    className={`w-2 h-2 rounded-full mr-2 ${
+                      userProfile.householdStatus === "rescued"
+                        ? "bg-green-500"
+                        : userProfile.householdStatus === "pending"
+                          ? "bg-yellow-500"
+                          : "bg-red-500"
+                    }`}
+                  />
                   <Text className="font-medium capitalize">
                     {userProfile.householdStatus}
                   </Text>

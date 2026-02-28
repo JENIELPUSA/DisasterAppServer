@@ -1,30 +1,37 @@
-// App.js - with MemberOfHouseholdForm screen addition and fixed provider structure
+// App.js
 import React, { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "react-native";
-import { AuthProvider } from "./src/contexts/AuthContext";
-import { BarangayDisplayProvider } from "./src/contexts/BrgyContext/BarangayContext";
+
+// Contexts
+import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
+import { IncidentReportProvider } from "./src/contexts/IncidentReportContext/IncidentReportContext";
+import { NasirangBahayProvider } from "./src/contexts/NasirangBahayReportContext/NasirangBahayReportContext";
+import { MunicipalityProvider } from "./src/contexts/MunicipalityContext/MunicipalityContext";
+import { ProfileProvider } from "./src/contexts/ProfileContext/ProfileContext";
+import { HouseHoldMemberProvider } from "./src/contexts/HouseHoldMemberContext/HouseHoldMemberContext";
+import { HouseholdProvider } from "./src/contexts/HouseholdLeadContext/HouseholdContext";
 import { EvacuationDisplayProvider } from "./src/contexts/EvacuationContext/EvacuationContext";
+import { BarangayDisplayProvider } from "./src/contexts/BrgyContext/BarangayContext";
+import { NotificationProvider } from "./src/contexts/NotificationContext/NotificationContext";
+import { TrackingEvacuatesProvider } from "./src/contexts/TrackingContext/TrackingContext";
+
+// Screens
 import LoginPage from "./src/screens/LoginPage";
 import MainTabs from "./MainTabs";
 import LoadingScreen from "./src/ReusableComponent/LoadingOverlay";
-import { HouseholdProvider } from "./src/contexts/HouseholdLeadContext/HouseholdContext";
-import { HouseHoldMemberProvider } from "./src/contexts/HouseHoldMemberContext/HouseHoldMemberContext";
-import { ProfileProvider } from "./src/contexts/ProfileContext/ProfileContext";
-import { MunicipalityProvider } from "./src/contexts/MunicipalityContext/MunicipalityContext";
+
+// Socket Listener
+import SocketListener from "./src/SocketListener/SocketListener"; // default export
 
 const Stack = createNativeStackNavigator();
 
-// Create a separate navigator component that uses useAuth
+// Navigator that checks auth
 const AppNavigator = () => {
-  const { useAuth } = require("./src/contexts/AuthContext");
   const { authToken, isLoading } = useAuth();
 
-  // Show loading screen while checking auth state
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
+  if (isLoading) return <LoadingScreen />;
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -37,52 +44,53 @@ const AppNavigator = () => {
   );
 };
 
-// Main App Component
+// Main App
 export default function App() {
   const [isAppReady, setIsAppReady] = useState(false);
 
-  // Initialize app
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Initialize any async tasks here
-        // e.g., load fonts, check initial auth state, etc.
-
-        // Simulate initialization time
+        // Any async initialization
         await new Promise((resolve) => setTimeout(resolve, 500));
-
         setIsAppReady(true);
-      } catch (error) {
-        console.error("Failed to initialize app:", error);
-        setIsAppReady(true); // Still show app even if initialization fails
+      } catch (err) {
+        console.error("App initialization failed:", err);
+        setIsAppReady(true);
       }
     };
-
     initializeApp();
   }, []);
 
-  // Show loading screen until app is ready
-  if (!isAppReady) {
-    return <LoadingScreen />;
-  }
+  if (!isAppReady) return <LoadingScreen />;
 
   return (
     <NavigationContainer>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <AuthProvider>
-        <MunicipalityProvider>
-          <ProfileProvider>
-            <HouseHoldMemberProvider>
-              <HouseholdProvider>
-                <EvacuationDisplayProvider>
-                  <BarangayDisplayProvider>
-                    <AppNavigator />
-                  </BarangayDisplayProvider>
-                </EvacuationDisplayProvider>
-              </HouseholdProvider>
-            </HouseHoldMemberProvider>
-          </ProfileProvider>
-        </MunicipalityProvider>
+        <TrackingEvacuatesProvider>
+          <NotificationProvider>
+            <IncidentReportProvider>
+              <NasirangBahayProvider>
+                <MunicipalityProvider>
+                  <ProfileProvider>
+                    <HouseHoldMemberProvider>
+                      <HouseholdProvider>
+                        <EvacuationDisplayProvider>
+                          <BarangayDisplayProvider>
+                            {/* SocketListener as standalone */}
+                            <SocketListener />
+                            <AppNavigator />
+                          </BarangayDisplayProvider>
+                        </EvacuationDisplayProvider>
+                      </HouseholdProvider>
+                    </HouseHoldMemberProvider>
+                  </ProfileProvider>
+                </MunicipalityProvider>
+              </NasirangBahayProvider>
+            </IncidentReportProvider>
+          </NotificationProvider>
+        </TrackingEvacuatesProvider>
       </AuthProvider>
     </NavigationContainer>
   );

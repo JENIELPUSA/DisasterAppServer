@@ -16,6 +16,7 @@ import { HouseholdContext } from "../contexts/HouseholdLeadContext/HouseholdCont
 import LoadingOverlay from "../ReusableComponent/LoadingOverlay";
 import { BarangayDisplayContext } from "../contexts/BrgyContext/BarangayContext";
 import { MunicipalityContext } from "../contexts/MunicipalityContext/MunicipalityContext";
+import StatusModal from "../components/modals/SuccessFailed/SuccessFailedModal";
 
 export default function LoginPage({ navigation }) {
   const { isBarangaysDropdown } = useContext(BarangayDisplayContext);
@@ -33,6 +34,10 @@ export default function LoginPage({ navigation }) {
   const scrollViewRef = useRef(null);
   const screenWidth = 360;
 
+  const [statusVisible, setStatusVisible] = useState(false);
+  const [statusType, setStatusType] = useState("success");
+  const [statusMessage, setStatusMessage] = useState("");
+
   const handleLogin = async () => {
     if (!email || !password) return;
     setIsLoading(true);
@@ -41,11 +46,31 @@ export default function LoginPage({ navigation }) {
     const timer = setInterval(() => setSeconds((prev) => prev + 1), 1000);
 
     try {
-      await login(email, password);
+      const result = await login(email, password);
+
+      if (result.success) {
+        setStatusType("success");
+        setStatusMessage("✅ Your report has been successfully sent!");
+        // Auto-reset after delay
+        setTimeout(() => {
+          setStatusVisible(true);
+        }, 1000);
+      } else {
+        setStatusType("error");
+        setStatusMessage(
+          result.error || "❌ Sending was not successful."
+        );
+        setStatusVisible(true);
+      }
     } finally {
       clearInterval(timer);
       setIsLoading(false);
     }
+  };
+
+  // Function para sa pag-close ng modal nang maayos
+  const handleCloseModal = () => {
+    setReportBahaModalVisible(false);
   };
 
   const carouselSlides = [
@@ -175,6 +200,17 @@ export default function LoginPage({ navigation }) {
         totalSlides={carouselSlides.length + 1}
         onSkip={() => goToSlide(carouselSlides.length)}
         onNext={() => goToSlide(currentSlide + 1)}
+      />
+      <StatusModal
+        visible={statusVisible}
+        type={statusType}
+        message={statusMessage}
+        onClose={() => {
+          setStatusVisible(false);
+          if (statusType === "success") {
+            handleCloseModal();
+          }
+        }}
       />
     </View>
   );

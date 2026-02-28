@@ -13,10 +13,9 @@ import { EvacuationDisplayContext } from "../../../contexts/EvacuationContext/Ev
 import { HouseholdContext } from "../../../contexts/HouseholdLeadContext/HouseholdContext";
 import { HouseHoldMemberContext } from "../../../contexts/HouseHoldMemberContext/HouseHoldMemberContext";
 import { MunicipalityContext } from "../../../contexts/MunicipalityContext/MunicipalityContext";
-import EvacuationForm from "./EvacuationForm";
-import EvacuationMapView from "./EvacuationMapView";
-import EvacuationListView from "./EvacuationListView";
 import HouseHold from "../HouseHold";
+import EvacuationCenters from "./EvacuationCenter";
+import StatusModal from "../SuccessFailed/SuccessFailedModal";
 
 const BarangayView = ({
   selectedMunicipality,
@@ -26,34 +25,16 @@ const BarangayView = ({
   handleCancel,
   onEditBarangay,
   onViewHousehold,
-  onViewEvacuation,
   deleteBarangay,
   fetchBarangays,
 }) => {
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedBarangay, setSelectedBarangay] = useState(null);
   const [showEvacuationView, setShowEvacuationView] = useState(false);
-  const [evacuationData, setEvacuationData] = useState([]);
-  const [evacuationSearch, setEvacuationSearch] = useState("");
-  const {
-    fetchHouseholdMembers,
-    householdMembers,
-    loading,
-    setLoading,
-    updateHouseholdMemberStatus,
-  } = useContext(HouseHoldMemberContext);
-  const { municipalities } = useContext(MunicipalityContext);
-  const { AddEvacuation, evacuations, updateEvacuation, deleteEvacuation } =
-    useContext(EvacuationDisplayContext);
-  const { fetchHouseholdLeads, householdLeads } = useContext(HouseholdContext);
 
-  const [showAddEvacuationForm, setShowAddEvacuationForm] = useState(false);
-  const [showMapView, setShowMapView] = useState(false);
-  const [showAddLocationMap, setShowAddLocationMap] = useState(false);
-
-  const [selectedEvacuation, setSelectedEvacuation] = useState(null);
-  const [selectedLocation, setSelectedLocation] = useState(null);
-  const [editingEvacuation, setEditingEvacuation] = useState(null);
+  const [statusVisible, setStatusVisible] = useState(false);
+  const [statusType, setStatusType] = useState("success");
+  const [statusMessage, setStatusMessage] = useState("");
 
   // State for household view
   const [showHouseholdView, setShowHouseholdView] = useState(false);
@@ -62,50 +43,38 @@ const BarangayView = ({
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Helper functions for safe access
-  const getEvacuationBarangayName = (evac) => {
-    return evac.barangay ? evac.barangay.barangayName : null;
-  };
-
-  const getEvacuationMunicipality = (evac) => {
-    return evac.barangay ? evac.barangay.municipality : null;
-  };
-
-  // Function to get municipality ID by name
-  const getMunicipalityIdByName = (municipalityName) => {
-    const municipality = municipalities.find(mun => mun.municipalityName === municipalityName);
-    return municipality ? municipality._id : null;
-  };
-
-  // Function to get municipality name by ID
-  const getMunicipalityNameById = (municipalityId) => {
-    const municipality = municipalities.find(mun => mun._id === municipalityId);
-    return municipality ? municipality.municipalityName : null;
-  };
-
-  console.log("selectedMunicipality",selectedMunicipality)
+  const { evacuations, deleteEvacuation } = useContext(
+    EvacuationDisplayContext
+  );
+  const { fetchHouseholdLeads, householdLeads } = useContext(HouseholdContext);
+  const {
+    fetchHouseholdMembers,
+    householdMembers,
+    loading,
+    setLoading,
+    updateHouseholdMemberStatus,
+  } = useContext(HouseHoldMemberContext);
 
   // Debounce effect para sa search
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
-    }, 500); // 500ms debounce delay
+    }, 500);
 
     return () => {
       clearTimeout(timer);
     };
   }, [search]);
 
-  // Effect para tawagin ang fetchBarangays kapag nagbago ang debouncedSearch o selectedMunicipality
+  // Effect para tawagin ang fetchBarangays
   useEffect(() => {
     const fetchData = async () => {
       if (!selectedMunicipality || typeof fetchBarangays !== "function") return;
-      await fetchBarangays(debouncedSearch, 1); // search, page
+      await fetchBarangays(debouncedSearch, 1);
     };
 
     fetchData();
   }, [debouncedSearch, selectedMunicipality, fetchBarangays]);
-
 
   const getDisplayBarangayName = (barangay) => {
     if (barangay.barangayName && barangay.barangayName.trim() !== "") {
@@ -120,156 +89,6 @@ const BarangayView = ({
     return "Unnamed Barangay";
   };
 
-  const getEvacuationStatus = (currentEvacuation, evacuationCapacity) => {
-    if (!evacuationCapacity || evacuationCapacity === 0) return "No Capacity";
-    const percentage = (currentEvacuation / evacuationCapacity) * 100;
-    if (percentage >= 90) return "Full";
-    if (percentage >= 70) return "High";
-    return "Available";
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Full":
-        return "#EF4444";
-      case "High":
-        return "#F97316";
-      case "Available":
-        return "#10B981";
-      case "No Capacity":
-        return "#6B7280";
-      default:
-        return "#6B7280";
-    }
-  };
-
-  console.log("barangaysList",barangaysList)
-
-  const processEvacuationData = (rawEvacuations) => {
-    return rawEvacuations
-      .filter(evac => evac.barangay) // Filter out evacuations without barangay
-      .map((evac) => {
-        const currentEvacuation = evac.totalHouseholds || 0;
-        const evacuationCapacity = evac.evacuationCapacity || 0;
-        const percentage =
-          evacuationCapacity > 0
-            ? (currentEvacuation / evacuationCapacity) * 100
-            : 0;
-        const availableCapacity = Math.max(
-          evacuationCapacity - currentEvacuation,
-          0
-        );
-        const status = getEvacuationStatus(currentEvacuation, evacuationCapacity);
-        return {
-          ...evac,
-          currentEvacuation,
-          evacuationPercentage: percentage,
-          availableCapacity,
-          status,
-          statusColor: getStatusColor(status),
-        };
-      });
-  };
-
-  const handleEvacuationSubmit = async (formData) => {
-    try {
-      if (editingEvacuation) {
-        // UPDATE EXISTING EVACUATION
-        const updatedEvacuation = {
-          ...formData,
-          barangay: selectedBarangay,
-          municipality: selectedMunicipality._id, // Pass municipality ID instead of name
-          updatedAt: new Date().toISOString(),
-          createdAt: editingEvacuation.createdAt || new Date().toISOString(),
-        };
-        await updateEvacuation(updatedEvacuation._id, updatedEvacuation);
-        Alert.alert("Success", "Evacuation center updated successfully!");
-      } else {
-        // ADD NEW EVACUATION
-        const newEvacuation = {
-          ...formData,
-          barangay: selectedBarangay,
-          municipality: selectedMunicipality._id, // Pass municipality ID instead of name
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        await AddEvacuation(newEvacuation);
-        Alert.alert("Success", "Evacuation center added successfully!");
-      }
-
-      setShowAddEvacuationForm(false);
-      setEditingEvacuation(null);
-    } catch (error) {
-      console.error("Error saving evacuation:", error);
-      Alert.alert(
-        "Error",
-        `Failed to ${editingEvacuation ? "update" : "add"} evacuation center: ${
-          error.message
-        }`
-      );
-    }
-  };
-
-  const handleEditEvacuation = (evacuation) => {
-    console.log("evacuation", evacuation);
-    setEditingEvacuation(evacuation);
-    setShowAddEvacuationForm(true);
-  };
-
-  const handleDeleteEvacuation = (evacuation) => {
-    Alert.alert(
-      "Delete Evacuation Center",
-      `Are you sure you want to delete ${evacuation.evacuationName}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteEvacuation(evacuation._id);
-              Alert.alert("Success", "Evacuation center deleted successfully!");
-            } catch (error) {
-              console.error("Delete failed:", error);
-              Alert.alert("Error", "Failed to delete evacuation center.");
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleViewEvacuationDetails = (evacuation) => {
-    setSelectedEvacuation(evacuation);
-    setShowMapView(true);
-  };
-
-  const handleViewEvacuationOnMap = (evacuation) => {
-    setSelectedEvacuation(evacuation);
-    setShowMapView(true);
-  };
-
-  const handleLocationSelect = (location) => {
-    setSelectedLocation(location);
-  };
-
-  const handleEvacuationSelect = (evacuationId) => {
-    const selected = evacuationData.find((evac) => evac._id === evacuationId);
-    if (selected) {
-      setSelectedEvacuation(selected);
-      Alert.alert(
-        selected.evacuationName,
-        `Status: ${selected.status}\nCapacity: ${
-          selected.currentEvacuation || 0
-        }/${selected.evacuationCapacity}\nContact: ${
-          selected.contactPerson?.name || "N/A"
-        }`,
-        [{ text: "OK" }]
-      );
-    }
-  };
-
   const openMenu = (barangay) => {
     setSelectedBarangay(barangay);
     setMenuVisible(true);
@@ -280,14 +99,16 @@ const BarangayView = ({
       setMenuVisible(false);
       onEditBarangay({
         barangayData: selectedBarangay,
-        municipality: selectedMunicipality, // Pass municipality object with ID
+        municipality: selectedMunicipality,
       });
     }
   };
 
   const handleDelete = () => {
     if (!selectedBarangay) return;
+
     setMenuVisible(false);
+
     Alert.alert(
       "Delete Barangay",
       `Are you sure you want to delete ${getDisplayBarangayName(
@@ -299,24 +120,32 @@ const BarangayView = ({
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            console.log("Deleting ID:", selectedBarangay._id);
-
             try {
-              await deleteBarangay(selectedBarangay._id);
-              console.log("Barangay deleted successfully");
+              const result = await deleteBarangay(selectedBarangay._id);
+              if (result.success) {
+                setStatusType("success");
+                setStatusMessage("Barangay deleted successfully.");
+              } else {
+                setStatusType("error");
+                setStatusMessage(result.error || "Failed to delete barangay.");
+              }
 
-              // I-refresh ang barangays list pagkatapos mag-delete
+              setStatusVisible(true);
+
               if (
                 selectedMunicipality &&
                 typeof fetchBarangays === "function"
               ) {
                 await fetchBarangays({
-                  municipality: selectedMunicipality._id, // Pass ID instead of name
+                  municipality: selectedMunicipality._id,
                   search: debouncedSearch,
                 });
               }
             } catch (error) {
               console.error("Delete failed:", error);
+              setStatusType("error");
+              setStatusMessage("Something went wrong. Please try again.");
+              setStatusVisible(true);
             }
           },
         },
@@ -333,10 +162,9 @@ const BarangayView = ({
     setMenuVisible(false);
 
     try {
-      // Pass municipality ID instead of name
-      await fetchHouseholdLeads({ 
+      await fetchHouseholdLeads({
         selectedBarangayId: selectedBarangay._id,
-        municipalityId: selectedMunicipality._id 
+        municipalityId: selectedMunicipality._id,
       });
     } catch (error) {
       console.error("Error fetching household leads:", error);
@@ -350,31 +178,22 @@ const BarangayView = ({
     }
   };
 
-  const handleViewEvacuationClick = () => {
-    if (selectedBarangay) {
-      setMenuVisible(false);
-      if (onViewEvacuation) {
-        onViewEvacuation(selectedBarangay);
-      } else {
-        // Compare municipality by ID instead of name
-        const barangayEvacuations = evacuations.filter(
-          (evac) => evac.barangay && 
-          evac.barangay.municipality === selectedMunicipality._id && // Compare by ID
-          evac.barangay.barangayName === selectedBarangay.barangayName
-        );
-        const processedEvacuations = processEvacuationData(barangayEvacuations);
-        setEvacuationData(processedEvacuations);
-        setShowEvacuationView(true);
-      }
+  const handleViewEvacuationClick = async () => {
+    if (!selectedBarangay) {
+      Alert.alert("Error", "No barangay selected");
+      return;
     }
+
+    setMenuVisible(false);
+    setShowEvacuationView(true);
   };
 
   const renderBarangayCard = ({ item }) => {
-    // Compare municipality by ID instead of name
     const barangayEvacuationCount = evacuations.filter(
-      (evac) => evac.barangay && 
-      evac.barangay.municipality === selectedMunicipality._id && // Compare by ID
-      evac.barangay.barangayName === item.barangayName
+      (evac) =>
+        evac.barangay &&
+        evac.barangay.municipality === selectedMunicipality._id &&
+        evac.barangay.barangayName === item.barangayName
     ).length;
 
     return (
@@ -474,75 +293,22 @@ const BarangayView = ({
     );
   }
 
+  // Render EvacuationCenters component when evacuation view is active
   if (showEvacuationView && selectedBarangay) {
     return (
-      <>
-        <EvacuationListView
-          evacuationData={evacuationData}
-          barangayName={getDisplayBarangayName(selectedBarangay)}
-          municipalityName={selectedMunicipality.name}
-          searchQuery={evacuationSearch}
-          onSearchChange={setEvacuationSearch}
-          onAddEvacuation={() => {
-            setEditingEvacuation(null);
-            setShowAddEvacuationForm(true);
-          }}
-          onViewMap={() => {
-            setSelectedEvacuation(null);
-            setShowMapView(true);
-          }}
-          onViewEvacuationDetails={handleViewEvacuationDetails}
-          onEditEvacuation={handleEditEvacuation}
-          onDeleteEvacuation={handleDeleteEvacuation}
-          onViewEvacuationOnMap={handleViewEvacuationOnMap}
-        />
-        <TouchableOpacity
-          className="absolute top-4 left-4 z-10 bg-white p-2 rounded-full shadow-md"
-          onPress={() => setShowEvacuationView(false)}
-        >
-          <MaterialIcons name="arrow-back" size={24} color="#4B5563" />
-        </TouchableOpacity>
-        <EvacuationForm
-          visible={showAddEvacuationForm}
-          onClose={() => {
-            setShowAddEvacuationForm(false);
-            setEditingEvacuation(null);
-          }}
-          onSubmit={handleEvacuationSubmit}
-          selectedBarangay={selectedBarangay}
-          selectedMunicipality={selectedMunicipality}
-          initialData={editingEvacuation}
-          onMapSelect={() => setShowAddLocationMap(true)}
-          editingEvacuation={editingEvacuation}
-          municipalities={municipalities}
-        />
-        <EvacuationMapView
-          visible={showMapView}
-          onClose={() => setShowMapView(false)}
-          mode="view"
-          municipality={selectedMunicipality.name}
-          barangayName={getDisplayBarangayName(selectedBarangay)}
-          evacuationLocations={evacuationData}
-          selectedEvacuation={selectedEvacuation}
-          onEvacuationSelect={handleEvacuationSelect}
-        />
-        <EvacuationMapView
-          visible={showAddLocationMap}
-          onClose={() => setShowAddLocationMap(false)}
-          mode="select"
-          municipality={selectedMunicipality.name}
-          barangayName={getDisplayBarangayName(selectedBarangay)}
-          onLocationSelect={handleLocationSelect}
-          initialLocation={selectedLocation}
-        />
-      </>
+      <EvacuationCenters
+        selectedBarangay={selectedBarangay}
+        selectedMunicipality={selectedMunicipality}
+        getDisplayBarangayName={getDisplayBarangayName}
+        onBack={() => setShowEvacuationView(false)}
+      />
     );
   }
 
-  // Compare municipality by ID instead of name
+  // Main BarangayView render
   const municipalityEvacuationCount = evacuations.filter(
-    (evac) => evac.barangay && 
-    evac.barangay.municipality === selectedMunicipality._id // Compare by ID
+    (evac) =>
+      evac.barangay && evac.barangay.municipality === selectedMunicipality._id
   ).length;
 
   return (
@@ -766,9 +532,11 @@ const BarangayView = ({
                 </View>
                 {(() => {
                   const evacuationCount = evacuations.filter(
-                    (evac) => evac.barangay && 
-                    evac.barangay.municipality === selectedMunicipality._id && // Compare by ID
-                    evac.barangay.barangayName === selectedBarangay?.barangayName
+                    (evac) =>
+                      evac.barangay &&
+                      evac.barangay.municipality === selectedMunicipality._id &&
+                      evac.barangay.barangayName ===
+                        selectedBarangay?.barangayName
                   ).length;
                   if (evacuationCount > 0) {
                     return (
@@ -807,6 +575,12 @@ const BarangayView = ({
           </View>
         </TouchableOpacity>
       </Modal>
+      <StatusModal
+        visible={statusVisible}
+        type={statusType}
+        message={statusMessage}
+        onClose={() => setStatusVisible(false)}
+      />
     </>
   );
 };

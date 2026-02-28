@@ -38,7 +38,7 @@ import { BarangayDisplayContext } from "../contexts/BrgyContext/BarangayContext"
 import { AuthContext } from "../contexts/AuthContext";
 import { HouseholdContext } from "../contexts/HouseholdLeadContext/HouseholdContext.jsx";
 import { HouseHoldMemberContext } from "../contexts/HouseHoldMemberContext/HouseHoldMemberContext.jsx";
-
+import StatusModal from "../components/modals/SuccessFailed/SuccessFailedModal.jsx";
 // Modals
 import ViewHouseholdsModal from "../components/modals/ViewHouseholdsModal";
 import VideosModal from "../components/modals/VideosModal";
@@ -49,6 +49,14 @@ import ReportNasirangBahayModal from "../components/modals/ReportNasirangBahayMo
 import Barangay from "../components/modals/Barangay";
 import RegisterBarangayForm from "../components/RegisterBarangay";
 import { ProfileDisplayContext } from "../contexts/ProfileContext/ProfileContext.jsx";
+import { IncidentReportContext } from "../contexts/IncidentReportContext/IncidentReportContext.jsx";
+import { MunicipalityContext } from "../contexts/MunicipalityContext/MunicipalityContext.jsx";
+import { NasirangBahayContext } from "../contexts/NasirangBahayReportContext/NasirangBahayReportContext.jsx";
+import TyphoonReportList from "../components/modals/ReportBahaModal/TyphoneReportList.jsx";
+import { NotificationContext } from "../contexts/NotificationContext/NotificationContext.jsx";
+import HouseHoldMemberList from "../components/modals/HouseHoldMember/HouseholdMemberList.jsx";
+import Scanner from "../components/modals/Scanner/Scanner.jsx";
+import ReportHousehold from "../components/modals/ViewReportsHousehold/ReportHousehold.jsx";
 
 // Dummy Data
 import {
@@ -81,18 +89,40 @@ export default function HomeScreen() {
     displayBarangaysForUser,
     dropdownhousehold,
     displayDropdownInMaps,
+    barangays,
+    updateEvacuation,
   } = useContext(BarangayDisplayContext);
+  const {
+    addNasirangBahayReport,
+    fetchTyphoneName,
+    TyphoneName,
+    sendAfterReport,
+    fetchMyUploads,
+    Uploadreports,
+    setLoading,
+    loading,
+  } = useContext(NasirangBahayContext);
   const { requestRescue } = useContext(HouseHoldMemberContext);
   const { profile, fetchProfile } = useContext(ProfileDisplayContext);
-  const { NotifyLeadRescue, getHouseholdLeadsSendNotification, loading } =
-    useContext(HouseholdContext);
-  const { role } = useContext(AuthContext);
-
+  const {
+    NotifyLeadRescue,
+    getHouseholdLeadsSendNotification,
+    fetchHouseholdWithMembers,
+    householdWithMembers,
+  } = useContext(HouseholdContext);
+  const { role, linkId } = useContext(AuthContext);
+  const { addIncidentReport } = useContext(IncidentReportContext);
+  const { municipalities } = useContext(MunicipalityContext);
+  const { fetchNotification, Notification } = useContext(NotificationContext);
   // ==================== REFS FOR TRACKING ====================
   const renderCount = useRef(0);
   const notificationPressedRef = useRef(false);
   const locationUpdateIntervalRef = useRef(null);
   const locationSubscriptionRef = useRef(null);
+
+  const [statusVisible, setStatusVisible] = useState(false);
+  const [statusType, setStatusType] = useState("success");
+  const [statusMessage, setStatusMessage] = useState("");
 
   // ==================== MODAL STATES ====================
   const [analyticalReportsModalVisible, setAnalyticalReportsModalVisible] =
@@ -101,12 +131,20 @@ export default function HomeScreen() {
   const [quickAccessModalVisible, setQuickAccessModalVisible] = useState(false);
   const [viewHouseholdModalVisible, setViewHouseholdModalVisible] =
     useState(false);
+  const [HouseholdReport, setHouseholdReport] = useState(false);
+
+  const [ScannerVisible, setScannerVisible] = useState(false);
   const [barangayModalVisible, setBarangayModalVisible] = useState(false);
   const [registerBarangayModalVisible, setRegisterBarangayModalVisible] =
     useState(false);
 
   // ==================== PANEL STATES ====================
   const [notificationPanelVisible, setNotificationPanelVisible] =
+    useState(false);
+
+  const [typhoneCompilationVisible, settyphoneCompilationVisible] =
+    useState(false);
+  const [householdmemberListVisible, sethouseholdmemberListVisible] =
     useState(false);
   const [profilePanelVisible, setProfilePanelVisible] = useState(false);
   const [qrExpanded, setQrExpanded] = useState(false);
@@ -130,13 +168,11 @@ export default function HomeScreen() {
     progressPercentage: 0,
   });
 
-  // ==================== SELECTED ITEMS ====================
   const [selectedBarangay, setSelectedBarangay] = useState(null);
   const [selectedMunicipalityForForm, setSelectedMunicipalityForForm] =
     useState(null);
   const [searchHousehold, setSearchHousehold] = useState("");
 
-  // ==================== FLOOD REPORT STATES ====================
   const [reportBahaModalVisible, setReportBahaModalVisible] = useState(false);
   const [selectedBahaMedia, setSelectedBahaMedia] = useState([]);
   const [bahaLocation, setBahaLocation] = useState(null);
@@ -153,11 +189,10 @@ export default function HomeScreen() {
     emergencyNeeded: false,
   });
 
-  // ==================== HOUSE DAMAGE REPORT STATES ====================
   const [reportNasirangBahayModalVisible, setReportNasirangBahayModalVisible] =
     useState(false);
   const [selectedNasirangBahayMedia, setSelectedNasirangBahayMedia] = useState(
-    []
+    [],
   );
   const [nasirangBahayLocation, setNasirangBahayLocation] = useState(null);
   const [nasirangBahayIpAddress, setNasirangBahayIpAddress] =
@@ -184,13 +219,13 @@ export default function HomeScreen() {
   // ==================== USER PERMISSIONS ====================
   const canSeeEmergencyRescue = useMemo(
     () => ["household_lead", "brgy_captain", "household_member"].includes(role),
-    [role]
+    [role],
   );
 
   const canSeeAnalyticalReports = useMemo(
     () =>
       !["household_lead", "brgy_captain", "household_member"].includes(role),
-    [role]
+    [role],
   );
 
   // ==================== USER PROFILE FROM ACTUAL DATA ====================
@@ -323,72 +358,10 @@ export default function HomeScreen() {
     });
   }, [NotifyLeadRescue]);
 
-  // ==================== LOCATION FUNCTIONS ====================
-  const requestLocationPermission = useCallback(async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setLocationPermission(status === "granted");
-
-      if (status === "granted") {
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-
-        const newLocation = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.002,
-          longitudeDelta: 0.002,
-        };
-
-        setCurrentLocation(newLocation);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.log("Error getting location permission:", error);
-      return false;
-    }
-  }, []);
-
-  const startLocationTracking = useCallback(async () => {
-    try {
-      const hasPermission = await requestLocationPermission();
-
-      if (!hasPermission) {
-        Alert.alert(
-          "Location Permission",
-          "Location permission is required for live tracking."
-        );
-        return null;
-      }
-
-      // Subscribe to location updates
-      const subscription = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.BestForNavigation,
-          distanceInterval: 1,
-          timeInterval: 1000,
-        },
-        (location) => {
-          const newLocation = {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.002,
-            longitudeDelta: 0.002,
-          };
-
-          setCurrentLocation(newLocation);
-        }
-      );
-
-      locationSubscriptionRef.current = subscription;
-      return subscription;
-    } catch (error) {
-      console.log("Error starting location tracking:", error);
-      return null;
-    }
-  }, [requestLocationPermission]);
+  // 1. Gawin ang function para i-clear ang destination
+  const handleStopNavigation = () => {
+    setNavigationDestination(null);
+  };
 
   const stopLocationTracking = useCallback(() => {
     if (locationSubscriptionRef.current) {
@@ -403,7 +376,7 @@ export default function HomeScreen() {
       if (!household?.latitude || !household?.longitude) {
         Alert.alert(
           "Invalid Location",
-          "This household has no valid GPS coordinates for navigation."
+          "This household has no valid GPS coordinates for navigation.",
         );
         return;
       }
@@ -419,7 +392,7 @@ export default function HomeScreen() {
       setMapModalVisible(true);
       closeAllPanels();
     },
-    [closeAllPanels]
+    [closeAllPanels],
   );
 
   const handleRouteButtonPress = useCallback(
@@ -438,54 +411,11 @@ export default function HomeScreen() {
               openRouteInMap(household);
             },
           },
-        ]
+        ],
       );
     },
-    [openRouteInMap]
+    [openRouteInMap],
   );
-
-  const startNavigation = useCallback(async () => {
-    const hasPermission = await requestLocationPermission();
-
-    if (!hasPermission) {
-      Alert.alert(
-        "Location Permission",
-        "Location permission is needed for navigation."
-      );
-      return;
-    }
-
-    setIsNavigating(true);
-    await startLocationTracking();
-
-    Alert.alert(
-      "Navigation Started",
-      `Now navigating to ${navigationDestination?.name}\n\nFollow the route on the map.`,
-      [{ text: "OK" }]
-    );
-  }, [requestLocationPermission, startLocationTracking, navigationDestination]);
-
-  const stopNavigation = useCallback(() => {
-    Alert.alert(
-      "Stop Navigation",
-      "Are you sure you want to stop navigation?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Stop Navigation",
-          style: "destructive",
-          onPress: () => {
-            setIsNavigating(false);
-            stopLocationTracking();
-            Alert.alert("Navigation Stopped", "Navigation has been stopped.");
-          },
-        },
-      ]
-    );
-  }, [stopLocationTracking]);
 
   const handleArrival = useCallback(() => {
     Alert.alert(
@@ -502,12 +432,12 @@ export default function HomeScreen() {
             // Mark household as rescued here if needed
           },
         },
-      ]
+      ],
     );
   }, [stopLocationTracking]);
 
   // ==================== PANEL FUNCTIONS ====================
-  const toggleNotificationPanel = useCallback(() => {
+  const closeAllPanels = useCallback(() => {
     if (notificationPanelVisible) {
       Animated.parallel([
         Animated.timing(notificationPanelTranslateX, {
@@ -532,13 +462,50 @@ export default function HomeScreen() {
         }),
       ]).start(() => {
         setNotificationPanelVisible(false);
-        if (profilePanelVisible) {
-          setProfilePanelVisible(false);
-        }
       });
+    }
+    if (profilePanelVisible) {
+      Animated.parallel([
+        Animated.timing(profilePanelTranslateX, {
+          toValue: -width,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(mainContentTranslateX, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(mainContentScale, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(overlayOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setProfilePanelVisible(false);
+      });
+    }
+  }, [
+    notificationPanelVisible,
+    profilePanelVisible,
+    width,
+    notificationPanelTranslateX,
+    mainContentTranslateX,
+    mainContentScale,
+    overlayOpacity,
+  ]);
+
+  const toggleNotificationPanel = useCallback(() => {
+    if (notificationPanelVisible) {
+      closeAllPanels();
     } else {
       if (profilePanelVisible) {
-        closeProfilePanel();
+        closeAllPanels();
       }
 
       setNotificationPanelVisible(true);
@@ -577,37 +544,10 @@ export default function HomeScreen() {
 
   const toggleProfilePanel = useCallback(() => {
     if (profilePanelVisible) {
-      Animated.parallel([
-        Animated.timing(profilePanelTranslateX, {
-          toValue: -width,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(mainContentTranslateX, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(mainContentScale, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayOpacity, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setProfilePanelVisible(false);
-
-        if (notificationPanelVisible) {
-          setNotificationPanelVisible(false);
-        }
-      });
+      closeAllPanels();
     } else {
       if (notificationPanelVisible) {
-        closeNotificationPanel();
+        closeAllPanels();
       }
 
       setProfilePanelVisible(true);
@@ -708,20 +648,6 @@ export default function HomeScreen() {
     overlayOpacity,
   ]);
 
-  const closeAllPanels = useCallback(() => {
-    if (notificationPanelVisible) {
-      closeNotificationPanel();
-    }
-    if (profilePanelVisible) {
-      closeProfilePanel();
-    }
-  }, [
-    notificationPanelVisible,
-    profilePanelVisible,
-    closeNotificationPanel,
-    closeProfilePanel,
-  ]);
-
   const handleNotificationBellPress = useCallback(() => {
     if (notificationPressedRef.current) return;
 
@@ -739,7 +665,7 @@ export default function HomeScreen() {
   const handleProfileLogoPress = useCallback(async () => {
     toggleProfilePanel();
     fetchProfile();
-  }, [toggleProfilePanel]);
+  }, [toggleProfilePanel, fetchProfile]);
 
   // ==================== QR CODE FUNCTIONS ====================
   const handleQRPress = useCallback(() => {
@@ -779,11 +705,17 @@ export default function HomeScreen() {
 
   const handleMenuItemPress = useCallback((item) => {
     if (item.title === "View Households") setViewHouseholdModalVisible(true);
-    else if (item.title === "Report Baha sa Daan")
+    else if (item.title === "Report Incident")
       setReportBahaModalVisible(true);
     else if (item.title === "Report Nasirang Bahay")
       setReportNasirangBahayModalVisible(true);
     else if (item.title === "View Barangay") setBarangayModalVisible(true);
+    else if (item.title === "Typhone Compilation")
+      settyphoneCompilationVisible(true);
+    else if (item.title === "Member Of Family")
+      sethouseholdmemberListVisible(true);
+    else if (item.title === "QR Code Scanner") setScannerVisible(true);
+    else if (item.title === "View Household Report") setHouseholdReport(true);
     else setQuickAccessModalVisible(false);
   }, []);
 
@@ -801,23 +733,25 @@ export default function HomeScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await requestRescue("pending");
+              const result = await requestRescue("pending");
 
-              Alert.alert(
-                "Emergency Alert Sent",
-                "Emergency responders have been notified. Stay calm and follow instructions.",
-                [{ text: "OK" }]
-              );
+              if (result.success) {
+                setStatusType("success");
+                setStatusMessage(
+                  "Emergency responders have been notified. Stay calm and follow instructions.",
+                );
+              } else {
+                setStatusType("error");
+                setStatusMessage(result.error || "Failed to Request Rescuer");
+              }
+              setStatusVisible(true);
             } catch (err) {
-              Alert.alert(
-                "Request Failed",
-                err.message || "Unable to send rescue request.",
-                [{ text: "OK" }]
-              );
+              setStatusType("error");
+              setStatusMessage(err || "Failed to Request Rescuer");
             }
           },
         },
-      ]
+      ],
     );
   }, [requestRescue]);
 
@@ -871,13 +805,31 @@ export default function HomeScreen() {
 
   const handleRegisterBarangay = useCallback(
     (barangayData) => {
-      if (addBarangay) {
-        addBarangay(barangayData);
-        Alert.alert("Success", "Barangay added successfully!");
-      }
-      setSelectedMunicipalityForForm(null);
+      const register = async () => {
+        if (addBarangay) {
+          try {
+            const result = await addBarangay(barangayData);
+            if (result.success) {
+              setStatusType("success");
+              setStatusMessage("Barangay added successfullys");
+            } else {
+              setStatusType("error");
+              setStatusMessage(result.error || "Failed to add barangay.");
+            }
+            setStatusVisible(true);
+          } catch (error) {
+            console.error("Error adding barangay:", error);
+            setStatusType("error");
+            setStatusMessage("Something went wrong. Please try again.");
+          }
+        }
+
+        setSelectedMunicipalityForForm(null);
+      };
+
+      register();
     },
-    [addBarangay]
+    [addBarangay],
   );
 
   const generateRouteNotification = useCallback(
@@ -903,10 +855,10 @@ export default function HomeScreen() {
             text: "Later",
             style: "cancel",
           },
-        ]
+        ],
       );
     },
-    [handleRouteButtonPress]
+    [handleRouteButtonPress],
   );
 
   // ==================== CLEANUP EFFECTS ====================
@@ -918,7 +870,7 @@ export default function HomeScreen() {
         locationUpdateIntervalRef.current = null;
       }
     };
-  }, []);
+  }, [stopLocationTracking]);
 
   // ==================== RENDER DEBUGGING ====================
   useEffect(() => {
@@ -1019,6 +971,8 @@ export default function HomeScreen() {
         generateRouteNotification={generateRouteNotification}
         rescuedHouseholdsData={rescuedHouseholdsData}
         loading={loading}
+        fetchNotification={fetchNotification}
+        Notification={Notification}
       />
 
       {/* Expanded QR Modal Component */}
@@ -1106,6 +1060,7 @@ export default function HomeScreen() {
           <NavigationMap
             destination={navigationDestination}
             onArrival={handleArrival}
+            onStopNavigation={handleStopNavigation}
             showControls={true}
             style={{ flex: 1 }}
           />
@@ -1159,6 +1114,18 @@ export default function HomeScreen() {
         bahaData={bahaData}
         setBahaData={setBahaData}
         resetReportForms={resetBahaReportForms}
+        addIncidentReport={addIncidentReport}
+        municipalities={municipalities}
+        barangays={barangays}
+      />
+
+      <TyphoonReportList
+        visible={typhoneCompilationVisible}
+        onClose={() => settyphoneCompilationVisible(false)}
+        fetchMyUploads={fetchMyUploads}
+        Uploadreports={Uploadreports}
+        setIsLoading={setLoading}
+        isLoading={loading}
       />
       <ReportNasirangBahayModal
         reportNasirangBahayModalVisible={reportNasirangBahayModalVisible}
@@ -1172,6 +1139,25 @@ export default function HomeScreen() {
         nasirangBahayData={nasirangBahayData}
         setNasirangBahayData={setNasirangBahayData}
         resetReportForms={resetNasirangBahayReportForms}
+        addNasirangBahayReport={addNasirangBahayReport}
+        fetchTyphoneName={fetchTyphoneName}
+        TyphoneName={TyphoneName}
+        linkId={linkId}
+        sendAfterReport={sendAfterReport}
+      />
+
+      <StatusModal
+        visible={statusVisible}
+        type={statusType}
+        message={statusMessage}
+        onClose={() => setStatusVisible(false)}
+      />
+
+      <HouseHoldMemberList
+        visible={householdmemberListVisible}
+        onClose={() => sethouseholdmemberListVisible(false)}
+        fetchHouseholdWithMembers={fetchHouseholdWithMembers}
+        householdWithMembers={householdWithMembers}
       />
 
       {/* Barangay & Register Form */}
@@ -1184,6 +1170,7 @@ export default function HomeScreen() {
         deleteBarangay={deleteBarangay}
         fetchBarangays={fetchBarangays}
         displayBarangaysForUser={displayBarangaysForUser}
+        updateEvacuation={updateEvacuation}
       />
       <RegisterBarangayForm
         visible={registerBarangayModalVisible}
@@ -1193,6 +1180,14 @@ export default function HomeScreen() {
         }}
         addBarangay={handleRegisterBarangay}
         selectedMunicipality={selectedMunicipalityForForm}
+      />
+      <Scanner
+        visible={ScannerVisible}
+        onClose={() => setScannerVisible(false)}
+      />
+      <ReportHousehold
+        visible={HouseholdReport}
+        onClose={() => setHouseholdReport(false)}
       />
     </SafeAreaView>
   );

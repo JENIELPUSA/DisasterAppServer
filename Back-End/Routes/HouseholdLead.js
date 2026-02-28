@@ -8,6 +8,9 @@ router
   .route("/")
   .post(authController.protect, HouseholdLeadController.createHouseholdLead)
   .get(authController.protect, HouseholdLeadController.getAllHouseholdLeads);
+router
+  .route("/getHouseholdWithMembers")
+  .get(authController.protect, HouseholdLeadController.getHouseholdWithMembers);
 
 router
   .route("/:id")

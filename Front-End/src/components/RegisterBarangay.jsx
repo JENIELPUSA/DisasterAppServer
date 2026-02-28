@@ -33,7 +33,8 @@ export default function RegisterBarangayForm({
   const [loading, setLoading] = useState(false);
   const [marker, setMarker] = useState(null);
   const [showMap, setShowMap] = useState(false);
-  const [selectedMunicipalityInternal, setSelectedMunicipalityInternal] = useState("");
+  const [selectedMunicipalityInternal, setSelectedMunicipalityInternal] =
+    useState("");
   const [selectedMunicipalityId, setSelectedMunicipalityId] = useState("");
   const [mapHtml, setMapHtml] = useState("");
   const [currentStep, setCurrentStep] = useState(0);
@@ -49,7 +50,9 @@ export default function RegisterBarangayForm({
   const getMunicipalityById = (id) => {
     if (!municipalities || !Array.isArray(municipalities)) return null;
     // Try to find by _id first, then by id
-    return municipalities.find((mun) => mun._id === id || mun.id === id) || null;
+    return (
+      municipalities.find((mun) => mun._id === id || mun.id === id) || null
+    );
   };
 
   // Helper function to get municipality by name with safety check
@@ -108,10 +111,16 @@ export default function RegisterBarangayForm({
           // Check if it's an ID (ObjectId format) or name
           if (initialData.municipality.match(/^[0-9a-fA-F]{24}$/)) {
             // It's an ID
-            const municipalityObj = getMunicipalityById(initialData.municipality);
+            const municipalityObj = getMunicipalityById(
+              initialData.municipality
+            );
             if (municipalityObj) {
               // Use id field (not _id) if available
-              setSelectedMunicipalityId(municipalityObj.id || municipalityObj._id || initialData.municipality);
+              setSelectedMunicipalityId(
+                municipalityObj.id ||
+                  municipalityObj._id ||
+                  initialData.municipality
+              );
               setSelectedMunicipalityInternal(municipalityObj.municipalityName);
             } else {
               setSelectedMunicipalityId(initialData.municipality);
@@ -119,10 +128,14 @@ export default function RegisterBarangayForm({
             }
           } else {
             // It's a name
-            const municipalityObj = getMunicipalityByName(initialData.municipality);
+            const municipalityObj = getMunicipalityByName(
+              initialData.municipality
+            );
             if (municipalityObj) {
               // Use id field (not _id) if available
-              setSelectedMunicipalityId(municipalityObj.id || municipalityObj._id);
+              setSelectedMunicipalityId(
+                municipalityObj.id || municipalityObj._id
+              );
               setSelectedMunicipalityInternal(municipalityObj.municipalityName);
             } else {
               setSelectedMunicipalityInternal(initialData.municipality);
@@ -156,7 +169,7 @@ export default function RegisterBarangayForm({
         if (selectedMunicipality) {
           // Automatically set municipality from selectedMunicipality prop
           // IMPORTANT: Use selectedMunicipality.id NOT selectedMunicipality._id
-          setSelectedMunicipalityId(selectedMunicipality.id); // ✅ This is the ID to save
+          setSelectedMunicipalityId(selectedMunicipality.id); // This is the ID to save
           setSelectedMunicipalityInternal(selectedMunicipality.name);
           validateField("municipality", selectedMunicipality.name);
         }
@@ -593,7 +606,7 @@ export default function RegisterBarangayForm({
       );
       return;
     }
-    
+
     const html = generateMapHtml(selectedMunicipalityInternal);
     setMapHtml(html);
     setShowMap(true);
@@ -605,13 +618,13 @@ export default function RegisterBarangayForm({
       setIsMapReady(true);
       return;
     }
-    
+
     if (data.type === "location_selected" || data.type === "location_updated") {
       const { latitude, longitude } = data;
       try {
         // TANDAAN: Hindi na kailangan mag-check ng municipality dito
         // dahil ito ay pre-selected na
-        
+
         const result = await reverseGeocode(latitude, longitude);
         const municipalityName = selectedMunicipalityInternal; // Gamitin ang pre-selected
         const fullAddressText = buildFullAddress(
@@ -619,7 +632,7 @@ export default function RegisterBarangayForm({
           municipalityName,
           result.addressDetails
         );
-        
+
         setMarker({
           latitude,
           longitude,
@@ -627,10 +640,10 @@ export default function RegisterBarangayForm({
           municipality: selectedMunicipalityId,
           barangay: barangayName,
         });
-        
+
         setFullAddress(fullAddressText);
         validateField("location", "selected");
-        
+
         if (data.type === "location_selected") {
           Alert.alert(
             "Location Pinned",
@@ -722,10 +735,10 @@ You can drag the marker to adjust the position.`,
       return;
     }
 
-    // ✅ IMPORTANT: Save the municipality ID (selectedMunicipalityId) which comes from selectedMunicipality.id
+    // IMPORTANT: Save the municipality ID (selectedMunicipalityId) which comes from selectedMunicipality.id
     const locationData = {
       barangayName: barangayName.trim(),
-      municipality: selectedMunicipalityId, // ✅ This is the "id" from selectedMunicipality
+      municipality: selectedMunicipalityId, // This is the "id" from selectedMunicipality
       fullAddress: fullAddress.trim(),
       coordinates: {
         latitude: marker.latitude,
@@ -764,13 +777,6 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(
             } else if (addBarangay) {
               addBarangay(locationData);
             }
-
-            Alert.alert(
-              "Success",
-              isEditing
-                ? "Barangay updated successfully!"
-                : "Barangay registered successfully!"
-            );
             resetForm();
             if (onClose) onClose();
           },
@@ -896,7 +902,7 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(
                   onBlur={() => validateField("barangayName", barangayName)}
                 />
               </View>
-              
+
               {/* Municipality Display (Read-only) - Show the ID */}
               <View className="mt-4">
                 <Text className="text-gray-700 text-sm mb-2 font-medium">
@@ -959,17 +965,11 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(
                   <MaterialIcons
                     name="push-pin"
                     size={24}
-                    color={
-                      !barangayName.trim()
-                        ? "#9CA3AF"
-                        : "white"
-                    }
+                    color={!barangayName.trim() ? "#9CA3AF" : "white"}
                   />
                   <Text
                     className={`ml-3 font-semibold text-lg ${
-                      !barangayName.trim()
-                        ? "text-gray-500"
-                        : "text-white"
+                      !barangayName.trim() ? "text-gray-500" : "text-white"
                     }`}
                   >
                     Pin Barangay Location on Map
@@ -1024,7 +1024,7 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(
                     />
                     <View className="ml-3 flex-1">
                       <Text className="font-bold text-green-800 mb-1">
-                        ✅ Location Pinned Successfully
+                        Location Pinned Successfully
                       </Text>
                       <Text className="text-sm text-gray-700 mb-2">
                         {marker.address}
@@ -1085,7 +1085,9 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(
                         style={styles.iconStyle}
                       />
                       <Text className="text-cyan-700 text-sm ml-2 flex-1">
-                        2. Municipality is pre-selected: {selectedMunicipalityInternal} (ID: {selectedMunicipalityId})
+                        2. Municipality is pre-selected:{" "}
+                        {selectedMunicipalityInternal} (ID:{" "}
+                        {selectedMunicipalityId})
                       </Text>
                     </View>
                     <View style={styles.rowContainer}>
@@ -1107,7 +1109,8 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(
                         style={styles.iconStyle}
                       />
                       <Text className="text-cyan-700 text-sm ml-2 flex-1">
-                        4. Use GPS or tap on map to place marker, drag to adjust position
+                        4. Use GPS or tap on map to place marker, drag to adjust
+                        position
                       </Text>
                     </View>
                     <View style={styles.rowContainer}>
@@ -1118,7 +1121,8 @@ Coordinates: ${locationData.coordinates.latitude.toFixed(
                         style={styles.iconStyle}
                       />
                       <Text className="text-cyan-700 text-sm ml-2 flex-1">
-                        5. Review and {isEditing ? "update" : "save"} the barangay location
+                        5. Review and {isEditing ? "update" : "save"} the
+                        barangay location
                       </Text>
                     </View>
                   </View>

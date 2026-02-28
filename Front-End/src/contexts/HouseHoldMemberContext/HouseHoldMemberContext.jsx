@@ -58,7 +58,7 @@ export const HouseHoldMemberProvider = ({ children }) => {
         setLoading(false);
       }
     },
-    [authToken, backendUrl, search]
+    [authToken, backendUrl, search],
   );
 
   const updateHouseholdMemberStatus = useCallback(
@@ -76,7 +76,7 @@ export const HouseHoldMemberProvider = ({ children }) => {
             headers: {
               Authorization: `Bearer ${authToken}`,
             },
-          }
+          },
         );
 
         return res.data;
@@ -84,14 +84,14 @@ export const HouseHoldMemberProvider = ({ children }) => {
         console.error("Update Household Member Status Error:", err);
         setCustomError(
           err.response?.data?.message ||
-            "Failed to update household member status"
+            "Failed to update household member status",
         );
         throw err;
       } finally {
         setLoading(false);
       }
     },
-    [authToken, backendUrl]
+    [authToken, backendUrl],
   );
 
   const updateHouseholdMember = useCallback(
@@ -107,7 +107,7 @@ export const HouseHoldMemberProvider = ({ children }) => {
             headers: {
               Authorization: `Bearer ${authToken}`,
             },
-          }
+          },
         );
 
         if (res.data.status === "success") {
@@ -122,25 +122,26 @@ export const HouseHoldMemberProvider = ({ children }) => {
         setLoading(false);
       }
     },
-    [authToken, backendUrl]
+    [authToken, backendUrl],
   );
 
   const requestRescue = async (rescueStatus) => {
     setLoading(true);
     setCustomError(null);
 
-
     try {
-      await axios.post(
+      const res = await axios.post(
         `${backendUrl}/api/v1/HouseholdMember/requestRescueByMember`,
-        { rescueStatus},
+        { rescueStatus },
         {
           headers: {
             Authorization: `Bearer ${authToken}`,
           },
-        }
+        },
       );
-      
+      if (res.data.status === "success") {
+        return { success: true };
+      }
     } catch (err) {
       setCustomError(err.response?.data?.message || err.message);
       throw err;
@@ -160,7 +161,7 @@ export const HouseHoldMemberProvider = ({ children }) => {
         fetchHouseholdMembers,
         updateHouseholdMemberStatus,
         updateHouseholdMember,
-        requestRescue
+        requestRescue,
       }}
     >
       {children}

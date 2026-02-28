@@ -12,9 +12,6 @@ const householdLeadSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  verificationCode: {
-    type: String,
-  },
   familyMembers: {
     type: Number,
     required: [true, "Number of family members is required"],
@@ -23,10 +20,6 @@ const householdLeadSchema = new mongoose.Schema({
   barangayId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Barangay",
-  },
-  householdCode: {
-    type: String,
-    unique: true,
   },
   totalMembers: {
     type: Number,

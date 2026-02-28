@@ -15,7 +15,7 @@ const QuickAccessGrid = ({
 }) => {
   const { role } = useContext(AuthContext);
 
-  // ✅ FILTER MENU BASED ON ROLE
+  // FILTER MENU BASED ON ROLE
   const filteredItems = menuItems.filter(
     (item) => !item.roles || item.roles.includes(role)
   );
@@ -29,7 +29,7 @@ const QuickAccessGrid = ({
 
         {filteredItems.length > 0 && (
           <TouchableOpacity onPress={() => setQuickAccessModalVisible(true)}>
-            <Text className="text-cyan-600 font-semibold">View All</Text>
+            <Text className="text-cyan-700 font-semibold">View All</Text>
           </TouchableOpacity>
         )}
       </View>

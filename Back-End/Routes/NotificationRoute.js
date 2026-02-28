@@ -7,14 +7,10 @@ const authController = require('./../Controller/authController');
 router
   .route('/')
   .post(authController.protect, NotificationController.createNotification)
-  .get(authController.protect, NotificationController.DisplayNotification);
+  .get(authController.protect, NotificationController.getNotifications);
 
 router
   .route('/:id')
   .delete(authController.protect, NotificationController.deleteNotification);
-router
-  .patch('/:id/mark-read', authController.protect, NotificationController.markAsRead);
-router
-  .get('/getByLink/:linkId', authController.protect, NotificationController.getByLinkId);
 
 module.exports = router;
