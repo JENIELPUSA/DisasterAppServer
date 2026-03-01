@@ -39,11 +39,25 @@ const TILE_URL = `https://api.maptiler.com/maps/streets-v2-dark/256/{z}/{x}/{y}@
 
 MaplibreGL.setAccessToken(null);
 
+// ✅ Optional: Suppress MapLibre "Canceled" warnings
+const originalWarn = console.warn;
+console.warn = (...args) => {
+  if (args[0]?.includes?.('Request failed due to a permanent error: Canceled')) {
+    return;
+  }
+  originalWarn(...args);
+};
+
 const SEVERITY_COLORS = {
   high: "#ef4444",
   medium: "#f97316",
   low: "#22c55e",
 };
+
+// Throttle interval para sa camera updates (milliseconds)
+const CAMERA_UPDATE_THROTTLE = 500;
+// Threshold para sa off‑road detection (meters)
+const OFFROAD_THRESHOLD = 30;
 
 const NavigationMap = ({
   destination,
@@ -58,6 +72,15 @@ const NavigationMap = ({
 }) => {
   const cameraRef = useRef(null);
   const barangayOverlayOpacity = useRef(new Animated.Value(0)).current;
+
+  // Ref para iwasan ang pag-override ng zoom habang nagfo-follow
+  const initialFollowSet = useRef(false);
+  // Throttle ref para sa camera updates
+  const lastCameraUpdate = useRef(0);
+  const isCameraLockedRef = useRef(true); 
+  const [isCameraLockedState, setIsCameraLockedState] = useState(true);
+  // Ref para iwasan ang redundant state updates
+  const isFollowingRef = useRef(false);
 
   const [pulseCircleRadius, setPulseCircleRadius] = useState(0);
   const [pulseCircleOpacity, setPulseCircleOpacity] = useState(0.8);
@@ -75,15 +98,51 @@ const NavigationMap = ({
   const [selectedData, setSelectedData] = useState(null);
   const [sidebarType, setSidebarType] = useState(null);
 
+  // --- OFF-ROAD STATE (ginagamit pa rin sa logic pero hindi na ipinapakita) ---
+  const [isOffRoad, setIsOffRoad] = useState(false);
+
   // --- SPEECH STATES ---
   const [hasAnnouncedStart, setHasAnnouncedStart] = useState(false);
   const [hasAnnouncedNear, setHasAnnouncedNear] = useState(false);
   const [hasAnnouncedArrival, setHasAnnouncedArrival] = useState(false);
 
-  // SPEECH TRACKER: Gumagamit ng Set para hindi paulit-ulit ang salita sa bawat report
+  // SPEECH TRACKER: Set para hindi paulit-ulit ang salita sa bawat report
   const announcedTypesRef = useRef(new Set());
 
+  // --- ZIGZAG / WINDING ROAD DETECTION ---
+  const [windingZones, setWindingZones] = useState([]);             // bagong state
+  const announcedWindingRef = useRef(new Set());                    // bagong ref
+
   const hasDestination = !!(destination?.latitude && destination?.longitude);
+
+  // Sync ref with state para sa guard conditions
+  useEffect(() => {
+    isFollowingRef.current = isFollowing;
+  }, [isFollowing]);
+
+  // ✅ Sync lock ref with state
+  useEffect(() => {
+    isCameraLockedRef.current = isCameraLockedState;
+  }, [isCameraLockedState]);
+
+  // ✅ I-lock ang camera kapag walang destination, i-unlock kapag may destination
+  useEffect(() => {
+    if (hasDestination) {
+      setIsCameraLockedState(false);
+      isCameraLockedRef.current = false;
+      console.log('🔓 Camera UNLOCKED - Navigation active');
+    } else {
+      setIsCameraLockedState(true);
+      isCameraLockedRef.current = true;
+      console.log('🔒 Camera LOCKED - No navigation');
+    }
+  }, [hasDestination]);
+
+  const setIsFollowingWithLog = (value, source = "unknown") => {
+    if (isFollowingRef.current === value) return;
+    console.log(`setIsFollowing: ${value} (from: ${source})`);
+    setIsFollowing(value);
+  };
 
   const speak = (text) => {
     Speech.speak(text, { language: "tl-PH", pitch: 1.0, rate: 0.9 });
@@ -102,6 +161,117 @@ const NavigationMap = ({
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
+
+  // --- DISTANCE IN METERS (for off‑road detection and winding zones) ---
+  const getDistanceInMeters = (lat1, lon1, lat2, lon2) => {
+    const R = 6371000; // meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  // --- BAGONG FUNCTIONS PARA SA ZIGZAG DETECTION ---
+
+  // Calculate bearing between two points (degrees)
+  const calculateBearing = (lat1, lon1, lat2, lon2) => {
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+    const y = Math.sin(Δλ) * Math.cos(φ2);
+    const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+    const θ = Math.atan2(y, x);
+    return (θ * 180 / Math.PI + 360) % 360;
+  };
+
+  // Identify winding sections from route coordinates
+  const computeWindingZones = (coords) => {
+    if (!coords || coords.length < 3) return [];
+    const TURN_ANGLE_THRESHOLD = 30; // degrees
+    const ZONE_MERGE_DISTANCE = 200; // meters
+    const zones = [];
+    let currentZone = null;
+
+    for (let i = 1; i < coords.length - 1; i++) {
+      const p1 = coords[i - 1];
+      const p2 = coords[i];
+      const p3 = coords[i + 1];
+
+      const bearing1 = calculateBearing(p1[1], p1[0], p2[1], p2[0]);
+      const bearing2 = calculateBearing(p2[1], p2[0], p3[1], p3[0]);
+      let angleDiff = Math.abs(bearing2 - bearing1);
+      if (angleDiff > 180) angleDiff = 360 - angleDiff;
+
+      if (angleDiff > TURN_ANGLE_THRESHOLD) {
+        // May liko
+        const turnPoint = p2;
+        if (!currentZone) {
+          currentZone = { points: [turnPoint], startIndex: i };
+        } else {
+          const lastPoint = currentZone.points[currentZone.points.length - 1];
+          const dist = getDistanceInMeters(lastPoint[1], lastPoint[0], turnPoint[1], turnPoint[0]);
+          if (dist <= ZONE_MERGE_DISTANCE) {
+            currentZone.points.push(turnPoint);
+          } else {
+            // Tapusin ang kasalukuyang zone kung may hindi bababa sa 2 liko
+            if (currentZone.points.length >= 2) {
+              const avgLon = currentZone.points.reduce((sum, p) => sum + p[0], 0) / currentZone.points.length;
+              const avgLat = currentZone.points.reduce((sum, p) => sum + p[1], 0) / currentZone.points.length;
+              zones.push({ coordinates: [avgLon, avgLat], points: currentZone.points });
+            }
+            currentZone = { points: [turnPoint], startIndex: i };
+          }
+        }
+      } else {
+        // Hindi liko, tapusin ang kasalukuyang zone kung mayroon
+        if (currentZone) {
+          if (currentZone.points.length >= 2) {
+            const avgLon = currentZone.points.reduce((sum, p) => sum + p[0], 0) / currentZone.points.length;
+            const avgLat = currentZone.points.reduce((sum, p) => sum + p[1], 0) / currentZone.points.length;
+            zones.push({ coordinates: [avgLon, avgLat], points: currentZone.points });
+          }
+          currentZone = null;
+        }
+      }
+    }
+    // Tapusin ang huling zone
+    if (currentZone && currentZone.points.length >= 2) {
+      const avgLon = currentZone.points.reduce((sum, p) => sum + p[0], 0) / currentZone.points.length;
+      const avgLat = currentZone.points.reduce((sum, p) => sum + p[1], 0) / currentZone.points.length;
+      zones.push({ coordinates: [avgLon, avgLat], points: currentZone.points });
+    }
+    return zones;
+  };
+
+  // Compute minimum distance from user to any point on the route
+  const distanceToRoute = (pointLonLat, routeCoords) => {
+    const [lon, lat] = pointLonLat;
+    let minDist = Infinity;
+    for (let i = 0; i < routeCoords.length; i++) {
+      const [rLon, rLat] = routeCoords[i];
+      const dist = getDistanceInMeters(lat, lon, rLat, rLon);
+      if (dist < minDist) minDist = dist;
+      if (minDist < OFFROAD_THRESHOLD) break;
+    }
+    return minDist;
+  };
+
+  // --- OFF-ROAD DETECTION EFFECT (state lang, walang visual) ---
+  useEffect(() => {
+    if (!userLocation || routeCoordinates.length === 0) {
+      setIsOffRoad(false);
+      return;
+    }
+    const distance = distanceToRoute(
+      [userLocation.longitude, userLocation.latitude],
+      routeCoordinates
+    );
+    setIsOffRoad(distance > OFFROAD_THRESHOLD);
+  }, [userLocation, routeCoordinates]);
 
   // --- LOGIC: NAVIGATION PROGRESS SPEECH ---
   useEffect(() => {
@@ -125,7 +295,7 @@ const NavigationMap = ({
   useEffect(() => {
     if (!userLocation || incidentReports.length === 0) return;
 
-    const PROXIMITY_THRESHOLD = 0.5; // 500 meters detection
+    const PROXIMITY_THRESHOLD = 0.5;
     const nearbyTypes = new Set();
 
     incidentReports.forEach((report) => {
@@ -136,12 +306,10 @@ const NavigationMap = ({
         report.location.longitude,
       );
 
-      // Kapag ang hazard ay pasok sa 500m radius
       if (dist <= PROXIMITY_THRESHOLD) {
         const type = report.reportType?.toLowerCase();
         nearbyTypes.add(type);
 
-        // Magsasalita lang kung hindi pa na-a-announce ang type na ito sa kasalukuyang area
         if (!announcedTypesRef.current.has(type)) {
           announcedTypesRef.current.add(type);
 
@@ -158,11 +326,41 @@ const NavigationMap = ({
       }
     });
 
-    // Reset tracker kapag wala nang malapit na hazard para makapag-alert ulit sa susunod na zone
     if (nearbyTypes.size === 0 && announcedTypesRef.current.size > 0) {
       announcedTypesRef.current.clear();
     }
   }, [userLocation, incidentReports]);
+
+  // --- BAGONG EFFECT: Compute winding zones kapag nagbago ang ruta ---
+  useEffect(() => {
+    if (routeCoordinates.length > 0) {
+      const zones = computeWindingZones(routeCoordinates);
+      setWindingZones(zones);
+      announcedWindingRef.current.clear(); // i-reset para sa bagong ruta
+    } else {
+      setWindingZones([]);
+    }
+  }, [routeCoordinates]);
+
+  // --- BAGONG EFFECT: I-monitor ang lokasyon para mag-voice reminder sa zigzag ---
+  useEffect(() => {
+    if (!userLocation || windingZones.length === 0 || !hasDestination) return;
+
+    const PROXIMITY_THRESHOLD = 300; // metro
+    windingZones.forEach((zone, index) => {
+      const dist = getDistanceInMeters(
+        userLocation.latitude,
+        userLocation.longitude,
+        zone.coordinates[1], // latitude
+        zone.coordinates[0]  // longitude
+      );
+      const zoneId = `winding-${index}`;
+      if (dist <= PROXIMITY_THRESHOLD && !announcedWindingRef.current.has(zoneId)) {
+        speak("Approaching a winding road. Please drive carefully..");
+        announcedWindingRef.current.add(zoneId);
+      }
+    });
+  }, [userLocation, windingZones, hasDestination]);
 
   // --- PULSE ANIMATION ---
   useEffect(() => {
@@ -216,7 +414,7 @@ const NavigationMap = ({
         zoomLevel: 17,
         animationDuration: 1500,
       });
-      setIsFollowing(false);
+      setIsFollowingWithLog(false, "handleNearestIncident");
     }
   };
 
@@ -240,12 +438,23 @@ const NavigationMap = ({
         longitude: nearest.location.longitude,
         name: nearest.name,
       });
-      setIsFollowing(true);
+      setIsFollowingWithLog(true, "handleNearestEvacuation");
     }
   };
 
+  // ✅ Camera update logic - ONLY runs when navigation is ACTIVE
   useEffect(() => {
-    if (cameraRef.current && userLocation && isFollowing) {
+    if (isCameraLockedRef.current) return;
+    if (!hasDestination || !isFollowing || !userLocation || !cameraRef.current) {
+      initialFollowSet.current = false;
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastCameraUpdate.current < CAMERA_UPDATE_THROTTLE) return;
+    lastCameraUpdate.current = now;
+
+    if (!initialFollowSet.current) {
       cameraRef.current.setCamera({
         centerCoordinate: [userLocation.longitude, userLocation.latitude],
         zoomLevel: hasDestination ? 18.5 : 15.5,
@@ -253,9 +462,26 @@ const NavigationMap = ({
         heading: heading,
         animationDuration: 1000,
       });
+      initialFollowSet.current = true;
+      console.log('📍 Initial camera set - Following GPS');
+    } else {
+      cameraRef.current.setCamera({
+        centerCoordinate: [userLocation.longitude, userLocation.latitude],
+        heading: heading,
+        animationDuration: 1000,
+      });
+      console.log('📍 Camera following GPS');
     }
   }, [userLocation, heading, isFollowing, hasDestination]);
 
+  // I-reset ang isFollowing kapag nawala ang destination
+  useEffect(() => {
+    if (!hasDestination) {
+      setIsFollowingWithLog(false, "hasDestination changed");
+    }
+  }, [hasDestination]);
+
+  // ✅ GPS Watch
   useEffect(() => {
     let locSub, headSub;
     (async () => {
@@ -283,10 +509,14 @@ const NavigationMap = ({
 
   useEffect(() => {
     if (!hasDestination || !userLocation) return;
+    
+    const abortController = new AbortController();
+    
     (async () => {
       try {
         const res = await fetch(
           `https://router.project-osrm.org/route/v1/driving/${userLocation.longitude},${userLocation.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson`,
+          { signal: abortController.signal }
         );
         const data = await res.json();
         if (data?.code === "Ok") {
@@ -299,20 +529,37 @@ const NavigationMap = ({
             setInitialDistance(data.routes[0].distance);
         }
       } catch (e) {
-        console.error(e);
+        if (e.name !== 'AbortError') {
+          console.error(e);
+        }
       }
     })();
+    
+    return () => {
+      abortController.abort();
+    };
   }, [destination, userLocation]);
 
   const handleStopNavigation = () => {
+    console.log('🛑 Stop Navigation - BULLETPROOF RESET');
+    
+    isCameraLockedRef.current = true;
+    setIsCameraLockedState(true);
+    lastCameraUpdate.current = Date.now();
     setRouteCoordinates([]);
     setInitialDistance(null);
-    setIsFollowing(false);
+    setRouteInfo({ distance: 0, duration: 0 });
+    setIsFollowingWithLog(false, "handleStopNavigation");
     setHasAnnouncedStart(false);
     setHasAnnouncedNear(false);
     setHasAnnouncedArrival(false);
     announcedTypesRef.current.clear();
+    announcedWindingRef.current.clear();   // i-clear din ang winding announcements
+    initialFollowSet.current = false;
+    lastCameraUpdate.current = 0;
     if (onStopNavigation) onStopNavigation();
+    
+    console.log('✅ Navigation COMPLETELY RESET - Camera LOCKED from GPS');
   };
 
   const closeSidebar = () => {
@@ -341,7 +588,7 @@ const NavigationMap = ({
   const handleMapPress = (event) => {
     const feature = event.features[0];
     if (!feature) return;
-    setIsFollowing(false);
+    setIsFollowingWithLog(false, "handleMapPress");
     const data =
       typeof feature.properties.rawData === "string"
         ? JSON.parse(feature.properties.rawData)
@@ -357,6 +604,31 @@ const NavigationMap = ({
       setSelectedData(data);
     }
   };
+
+  // --- DYNAMIC ZOOM CONTROLS ---
+  const handleZoomIn = useCallback(async () => {
+    if (cameraRef.current) {
+      try {
+        const currentCam = await cameraRef.current.getCamera();
+        const newZoom = (currentCam.zoom || 10) + 1;
+        cameraRef.current.setCamera({ zoomLevel: newZoom, animationDuration: 300 });
+      } catch (e) {
+        console.warn("Failed to get camera for zoom in", e);
+      }
+    }
+  }, []);
+
+  const handleZoomOut = useCallback(async () => {
+    if (cameraRef.current) {
+      try {
+        const currentCam = await cameraRef.current.getCamera();
+        const newZoom = Math.max((currentCam.zoom || 10) - 1, 1);
+        cameraRef.current.setCamera({ zoomLevel: newZoom, animationDuration: 300 });
+      } catch (e) {
+        console.warn("Failed to get camera for zoom out", e);
+      }
+    }
+  }, []);
 
   const householdGeoJSON = {
     type: "FeatureCollection",
@@ -429,9 +701,11 @@ const NavigationMap = ({
         logoEnabled={false}
         attributionEnabled={false}
         styleURL={MaplibreGL.StyleURL.Dark}
-        onPress={() => setIsFollowing(false)}
-        onRegionWillChange={(e) => {
-          if (e.gesture) setIsFollowing(false);
+        onPress={() => setIsFollowingWithLog(false, "MapView onPress")}
+        onCameraChanged={(event) => {
+          if (event.nativeEvent?.gestures?.length > 0) {
+            setIsFollowingWithLog(false, "onCameraChanged gesture");
+          }
         }}
       >
         <MaplibreGL.Camera ref={cameraRef} />
@@ -457,6 +731,66 @@ const NavigationMap = ({
           <MaplibreGL.RasterLayer id="maptilerLayer" />
         </MaplibreGL.RasterSource>
 
+        {/* ✅ OFF-ROAD DOT - TINANGGAL NA (i-uncomment kung gusto mong ibalik) */}
+        {/* {isOffRoad && userLocation && (
+          <MaplibreGL.ShapeSource
+            id="offRoadDotSource"
+            shape={{
+              type: "FeatureCollection",
+              features: [{
+                type: "Feature",
+                geometry: {
+                  type: "Point",
+                  coordinates: [userLocation.longitude, userLocation.latitude],
+                },
+              }],
+            }}
+          >
+            <MaplibreGL.CircleLayer
+              id="offRoadDot"
+              style={{
+                circleRadius: 12,
+                circleColor: "#ffffff",
+                circleOpacity: 0.8,
+                circlePitchAlignment: "map",
+              }}
+            />
+          </MaplibreGL.ShapeSource>
+        )} */}
+
+        {/* ✅ ROUTE LINES - nasa ilalim ng user marker gamit ang belowLayerID */}
+        {routeCoordinates.length > 0 && (
+          <MaplibreGL.ShapeSource
+            id="routeSource"
+            shape={{
+              type: "Feature",
+              geometry: { type: "LineString", coordinates: routeCoordinates },
+            }}
+          >
+            <MaplibreGL.LineLayer
+              id="routeMain"
+              belowLayerID="userSymbol"   // 👈 SIGURADONG NASA ILALIM NG USER ICON
+              style={{
+                lineColor: "#3b82f6",
+                lineWidth: 6,
+                lineCap: "round",
+                lineJoin: "round",
+              }}
+            />
+            <MaplibreGL.LineLayer
+              id="routeZigzag"
+              belowLayerID="userSymbol"   // 👈 SIGURADONG NASA ILALIM DIN
+              style={{
+                lineColor: "rgba(255,255,255,0.5)",
+                lineWidth: 2,
+                lineDasharray: [2, 2],
+                lineCap: "round",
+              }}
+            />
+          </MaplibreGL.ShapeSource>
+        )}
+
+        {/* ✅ INCIDENT ICONS */}
         <MaplibreGL.ShapeSource
           id="incidentSource"
           shape={incidentGeoJSON}
@@ -501,12 +835,14 @@ const NavigationMap = ({
               ],
               iconSize: 0.10,
               iconAllowOverlap: true,
+              iconIgnorePlacement: true,
               iconAnchor: "bottom",
               iconOffset: [0, -10],
             }}
           />
         </MaplibreGL.ShapeSource>
 
+        {/* ✅ EVACUATION ICONS */}
         <MaplibreGL.ShapeSource
           id="evacuationSource"
           shape={evacuationGeoJSON}
@@ -518,11 +854,13 @@ const NavigationMap = ({
               iconImage: "evacuation",
               iconSize: 0.07,
               iconAllowOverlap: true,
+              iconIgnorePlacement: true,
               iconAnchor: "bottom",
             }}
           />
         </MaplibreGL.ShapeSource>
 
+        {/* ✅ HOUSEHOLD ICONS */}
         <MaplibreGL.ShapeSource
           id="householdSource"
           shape={householdGeoJSON}
@@ -544,40 +882,13 @@ const NavigationMap = ({
               ],
               iconSize: 0.07,
               iconAllowOverlap: true,
+              iconIgnorePlacement: true,
               iconAnchor: "bottom",
             }}
           />
         </MaplibreGL.ShapeSource>
 
-        {routeCoordinates.length > 0 && (
-          <MaplibreGL.ShapeSource
-            id="routeSource"
-            shape={{
-              type: "Feature",
-              geometry: { type: "LineString", coordinates: routeCoordinates },
-            }}
-          >
-            <MaplibreGL.LineLayer
-              id="routeMain"
-              style={{
-                lineColor: "#3b82f6",
-                lineWidth: 6,
-                lineCap: "round",
-                lineJoin: "round",
-              }}
-            />
-            <MaplibreGL.LineLayer
-              id="routeZigzag"
-              style={{
-                lineColor: "rgba(255,255,255,0.5)",
-                lineWidth: 2,
-                lineDasharray: [2, 2],
-                lineCap: "round",
-              }}
-            />
-          </MaplibreGL.ShapeSource>
-        )}
-
+        {/* ✅ DESTINATION PIN */}
         {hasDestination && (
           <MaplibreGL.ShapeSource
             id="destinationPinSource"
@@ -595,12 +906,14 @@ const NavigationMap = ({
                 iconImage: "destination_icon",
                 iconSize: 0.08,
                 iconAllowOverlap: true,
+                iconIgnorePlacement: true,
                 iconAnchor: "bottom",
               }}
             />
           </MaplibreGL.ShapeSource>
         )}
 
+        {/* ✅ USER MARKER - NASA PINAKADULO PARA NASA IBABAW NG LAHAT */}
         {userLocation && (
           <MaplibreGL.ShapeSource
             id="userSource"
@@ -616,11 +929,13 @@ const NavigationMap = ({
               id="userSymbol"
               style={{
                 iconImage: "navigation",
-                iconSize: 0.1,
+                iconSize: 0.15,
                 iconRotate: heading,
                 iconRotationAlignment: "map",
                 iconAllowOverlap: true,
+                iconIgnorePlacement: true,
               }}
+              // TINANGGAL ANG aboveLayerID - hindi na kailangan dahil ang route lines ang nasa ilalim gamit ang belowLayerID
             />
           </MaplibreGL.ShapeSource>
         )}
@@ -698,20 +1013,39 @@ const NavigationMap = ({
         </View>
       )}
 
-      <View style={styles.fabContainer}>
-        <TouchableOpacity
-          style={[
-            styles.fab,
-            { backgroundColor: isFollowing ? "#3b82f6" : "#ffffff" },
-          ]}
-          onPress={() => setIsFollowing(!isFollowing)}
-        >
-          <MaterialIcons
-            name={isFollowing ? "gps-fixed" : "gps-not-fixed"}
-            size={26}
-            color={isFollowing ? "white" : "#4b5563"}
-          />
+      {/* Zoom Controls */}
+      <View style={styles.zoomContainer}>
+        <TouchableOpacity style={styles.zoomButton} onPress={handleZoomIn}>
+          <MaterialIcons name="add" size={24} color="white" />
         </TouchableOpacity>
+        <TouchableOpacity style={styles.zoomButton} onPress={handleZoomOut}>
+          <MaterialIcons name="remove" size={24} color="white" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.fabContainer}>
+        {/* GPS FOLLOW BUTTON - visible only during navigation */}
+        {hasDestination && (
+          <TouchableOpacity
+            style={[
+              styles.fab,
+              { backgroundColor: isFollowing ? "#3b82f6" : "#ffffff" },
+            ]}
+            onPress={() => {
+              isCameraLockedRef.current = false;
+              setIsCameraLockedState(false);
+              setIsFollowingWithLog(!isFollowing, "FAB toggle");
+            }}
+          >
+            <MaterialIcons
+              name={isFollowing ? "gps-fixed" : "gps-not-fixed"}
+              size={26}
+              color={isFollowing ? "white" : "#4b5563"}
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* Other FABs - visible only when no navigation */}
         {!hasDestination && (
           <>
             <TouchableOpacity
@@ -748,6 +1082,7 @@ const NavigationMap = ({
         )}
       </View>
 
+      {/* Sidebars */}
       {sidebarType === "incident" && selectedData && (
         <IncidentSidebar
           show={true}
@@ -759,7 +1094,9 @@ const NavigationMap = ({
               longitude: r.location.longitude,
               name: r.address,
             });
-            setIsFollowing(true);
+            isCameraLockedRef.current = false;
+            setIsCameraLockedState(false);
+            setIsFollowingWithLog(true, "IncidentSidebar onNavigate");
             closeSidebar();
           }}
         />
@@ -771,6 +1108,8 @@ const NavigationMap = ({
           household={selectedData}
           onSelectDestination={(h) => {
             onSelectDestination(h);
+            isCameraLockedRef.current = false;
+            setIsCameraLockedState(false);
             closeSidebar();
           }}
         />
@@ -782,6 +1121,8 @@ const NavigationMap = ({
           selectedHouse={selectedData}
           onSelectDestination={(h) => {
             onSelectDestination(h);
+            isCameraLockedRef.current = false;
+            setIsCameraLockedState(false);
             closeSidebar();
           }}
         />
@@ -878,6 +1219,23 @@ const styles = StyleSheet.create({
   progressBackground: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#333",
+  },
+  zoomContainer: {
+    position: "absolute",
+    left: 15,
+    bottom: 100,
+    gap: 10,
+    zIndex: 70,
+  },
+  zoomButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#444",
   },
   fabContainer: {
     position: "absolute",

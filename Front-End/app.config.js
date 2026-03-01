@@ -10,7 +10,7 @@ export default {
     userInterfaceStyle: "light",
     newArchEnabled: true,
     splash: {
-      image: "./assets/splash-icon.png",
+      image: "./assets/favicon.svg",
       resizeMode: "contain",
       backgroundColor: "#ffffff",
     },
@@ -19,7 +19,7 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/adaptive-icon.png",
+        foregroundImage: "./assets/favicon.svg",
         backgroundColor: "#ffffff",
       },
       package: "com.jenielpusa.sagipbayan", // <-- lowercase at walang underscores

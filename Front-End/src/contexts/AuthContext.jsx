@@ -91,9 +91,8 @@ export const AuthProvider = ({ children }) => {
 
             // Set axios header if token
             if (key === "token" && value) {
-              axios.defaults.headers.common[
-                "Authorization"
-              ] = `Bearer ${value}`;
+              axios.defaults.headers.common["Authorization"] =
+                `Bearer ${value}`;
             }
           }
         });
@@ -124,7 +123,7 @@ export const AuthProvider = ({ children }) => {
       if (status !== "granted") {
         Alert.alert(
           "Permission Required",
-          "Sorry, we need camera roll permissions to select an image."
+          "Sorry, we need camera roll permissions to select an image.",
         );
         return null;
       }
@@ -181,7 +180,7 @@ export const AuthProvider = ({ children }) => {
           if (formData.barangay) {
             console.log(
               "Appending barangayName for household_lead:",
-              formData.barangay
+              formData.barangay,
             );
             data.append("barangayName", formData.barangay);
           }
@@ -189,14 +188,14 @@ export const AuthProvider = ({ children }) => {
           // Family members (required)
           data.append(
             "familyMembers",
-            formData.familyMembers ? formData.familyMembers.toString() : "1"
+            formData.familyMembers ? formData.familyMembers.toString() : "1",
           );
           // Priority 1: Separate latitude and longitude
           if (formData.latitude && formData.longitude) {
             console.log(
               "Appending separate lat/long:",
               formData.latitude,
-              formData.longitude
+              formData.longitude,
             );
             data.append("latitude", formData.latitude.toString());
             data.append("longitude", formData.longitude.toString());
@@ -205,7 +204,7 @@ export const AuthProvider = ({ children }) => {
           else if (formData.gpsCoordinates) {
             console.log(
               "Parsing gpsCoordinates string:",
-              formData.gpsCoordinates
+              formData.gpsCoordinates,
             );
             const coords = formData.gpsCoordinates.split(",");
             if (coords.length >= 2) {
@@ -217,10 +216,10 @@ export const AuthProvider = ({ children }) => {
             } else {
               console.error(
                 "Invalid gpsCoordinates format:",
-                formData.gpsCoordinates
+                formData.gpsCoordinates,
               );
               throw new Error(
-                "Invalid GPS coordinates format. Expected 'latitude,longitude'"
+                "Invalid GPS coordinates format. Expected 'latitude,longitude'",
               );
             }
           }
@@ -228,14 +227,14 @@ export const AuthProvider = ({ children }) => {
           else {
             console.error("NO GPS COORDINATES PROVIDED FOR HOUSEHOLD_LEAD!");
             throw new Error(
-              "GPS coordinates are required for household lead registration. Please get your location first."
+              "GPS coordinates are required for household lead registration. Please get your location first.",
             );
           }
 
           // Emergency contact
           data.append(
             "emergencyContact",
-            formData.emergencyContact || formData.contactNumber || ""
+            formData.emergencyContact || formData.contactNumber || "",
           );
           break;
 
@@ -288,7 +287,7 @@ export const AuthProvider = ({ children }) => {
           },
           withCredentials: true,
           timeout: 30000, // 30 seconds timeout
-        }
+        },
       );
 
       if (res.data.success) {
@@ -361,7 +360,7 @@ export const AuthProvider = ({ children }) => {
         }
 
         return {
-          success: true
+          success: true,
         };
       } else {
         return {
@@ -415,8 +414,8 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await axios.get(
         `${apiUrl}/api/v1/authentication/check-email?email=${encodeURIComponent(
-          email
-        )}`
+          email,
+        )}`,
       );
 
       return {
@@ -438,7 +437,7 @@ export const AuthProvider = ({ children }) => {
       const res = await axios.post(
         `${apiUrl}/api/v1/authentication/login`,
         { email: inputEmail, password },
-        { withCredentials: true }
+        { withCredentials: true },
       );
       if (res.data.status === "Success") {
         const {
@@ -567,7 +566,7 @@ export const AuthProvider = ({ children }) => {
             "Content-Type": "multipart/form-data",
           },
           withCredentials: true,
-        }
+        },
       );
 
       if (res.data.success) {
@@ -589,7 +588,7 @@ export const AuthProvider = ({ children }) => {
         if (profileData.contactNumber) {
           await AsyncStorage.setItem(
             "contact_number",
-            safeValue(profileData.contactNumber)
+            safeValue(profileData.contactNumber),
           );
           setContactNumber(profileData.contactNumber);
         }
@@ -597,7 +596,7 @@ export const AuthProvider = ({ children }) => {
         if (res.data.data.avatar) {
           await AsyncStorage.setItem(
             "avatar",
-            safeValue(res.data.data.avatar.url || res.data.data.avatar)
+            safeValue(res.data.data.avatar.url || res.data.data.avatar),
           );
           setAvatar(res.data.data.avatar.url || res.data.data.avatar);
         }
@@ -627,7 +626,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await axios.post(
         `${apiUrl}/api/v1/authentication/forgot-password`,
-        { email }
+        { email },
       );
 
       return {
@@ -648,7 +647,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await axios.patch(
         `${apiUrl}/api/v1/authentication/reset-password/${token}`,
-        { password: newPassword }
+        { password: newPassword },
       );
 
       return {
@@ -679,6 +678,7 @@ export const AuthProvider = ({ children }) => {
         theme,
         avatar,
         isLoading,
+        setIsLoading,
         login,
         logout,
         signup,

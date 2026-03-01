@@ -9,6 +9,11 @@ android/build/
 ios/build/
 build/
 
+# Local environment files (IMPORTANT)
+.env
+.env.*
+config.env
+
 # IDEs / local configs
 .vscode/
 .idea/
@@ -16,7 +21,6 @@ build/
 # Logs
 *.log
 *.log.*
-
 
 # Git
 .git/

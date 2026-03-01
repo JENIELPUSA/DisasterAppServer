@@ -190,22 +190,6 @@ const TyphoonReportList = ({
                           onChangeText={setSearchQuery}
                         />
                       </View>
-
-                      {/* Action Buttons */}
-                      <View className="flex-row space-x-3">
-                        <TouchableOpacity 
-                          onPress={() => { handleClose(); setTimeout(onAddReport, 400); }}
-                          className="flex-1 flex-row items-center justify-center bg-cyan-700 py-4 rounded-2xl shadow-md active:opacity-90"
-                        >
-                          <MaterialIcons name="add-circle-outline" size={22} color="white" />
-                          <Text className="text-white font-bold ml-2">Add Report</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity className="flex-1 flex-row items-center justify-center bg-orange-500 py-4 rounded-2xl shadow-md active:opacity-90">
-                          <MaterialIcons name="summarize" size={22} color="white" />
-                          <Text className="text-white font-bold ml-2">Generate</Text>
-                        </TouchableOpacity>
-                      </View>
                     </View>
                   </SafeAreaView>
 

@@ -6,6 +6,7 @@ import {
   Platform,
   StatusBar,
   Text,
+  useWindowDimensions,
 } from "react-native";
 import CarouselSlide from "../components/Carousels/CarouselSlide";
 import DotIndicator from "../components/Carousels/DotIndicator";
@@ -19,59 +20,42 @@ import { MunicipalityContext } from "../contexts/MunicipalityContext/Municipalit
 import StatusModal from "../components/modals/SuccessFailed/SuccessFailedModal";
 
 export default function LoginPage({ navigation }) {
-  const { isBarangaysDropdown } = useContext(BarangayDisplayContext);
-  const { login, signup, checkEmailAvailability } = useContext(AuthContext);
-  const { DropdowndataLead, fetchDropdownAllLead, loading } =
-    useContext(HouseholdContext);
+  // Screen size adjustment
+  const { width: screenWidth } = useWindowDimensions();
 
+  // Contexts
+  const { isBarangaysDropdown } = useContext(BarangayDisplayContext);
+  
+  // Kinuha ang isLoading at login function mula sa AuthContext
+  const { login, signup, checkEmailAvailability, isLoading } = useContext(AuthContext);
+  
+  const { DropdowndataLead, fetchDropdownAllLead } = useContext(HouseholdContext);
   const { municipalities } = useContext(MunicipalityContext);
 
+  // States
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [currentSlide, setCurrentSlide] = useState(0);
   const scrollViewRef = useRef(null);
-  const screenWidth = 360;
 
   const [statusVisible, setStatusVisible] = useState(false);
   const [statusType, setStatusType] = useState("success");
   const [statusMessage, setStatusMessage] = useState("");
 
-  const handleLogin = async () => {
-    if (!email || !password) return;
-    setIsLoading(true);
-    setSeconds(0);
-
-    const timer = setInterval(() => setSeconds((prev) => prev + 1), 1000);
-
-    try {
-      const result = await login(email, password);
-
-      if (result.success) {
-        setStatusType("success");
-        setStatusMessage("✅ Your report has been successfully sent!");
-        // Auto-reset after delay
-        setTimeout(() => {
-          setStatusVisible(true);
-        }, 1000);
-      } else {
-        setStatusType("error");
-        setStatusMessage(
-          result.error || "❌ Sending was not successful."
-        );
-        setStatusVisible(true);
-      }
-    } finally {
+  // Timer Effect: Awtomatikong magbibilang kapag ang isLoading sa Context ay naging TRUE
+  useEffect(() => {
+    let timer;
+    if (isLoading) {
+      setSeconds(0);
+      timer = setInterval(() => {
+        setSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
       clearInterval(timer);
-      setIsLoading(false);
     }
-  };
-
-  // Function para sa pag-close ng modal nang maayos
-  const handleCloseModal = () => {
-    setReportBahaModalVisible(false);
-  };
+    return () => clearInterval(timer); // Cleanup pagka-unmount o paghinto ng loading
+  }, [isLoading]);
 
   const carouselSlides = [
     {
@@ -123,7 +107,7 @@ export default function LoginPage({ navigation }) {
   const loginSlide = {
     id: 5,
     title: "Let's Get Started!",
-    description: "...",
+    description: "Please sign in to your account to continue.",
     image: require("../../assets/SagipLogo.png"),
     gradientColors: ["#fff", "#fff"],
     gradientStart: { x: 0, y: 0 },
@@ -131,57 +115,111 @@ export default function LoginPage({ navigation }) {
     textColor: "#1F2937",
   };
 
+  const handleLogin = async () => {
+    if (!email || !password) return;
+
+    try {
+      // Tatawagin ang login mula sa context. 
+      // Ang context na ang bahala mag-set ng isLoading(true) at isLoading(false)
+      const result = await login(email, password);
+      
+      if (result.success) {
+        setStatusType("success");
+        setStatusMessage("Login Successful!");
+        setTimeout(() => setStatusVisible(true), 500);
+      } else {
+        setStatusType("error");
+        setStatusMessage(result.error || "❌ Invalid credentials.");
+        setStatusVisible(true);
+      }
+    } catch (error) {
+      console.error("Login Error:", error);
+      setStatusType("error");
+      setStatusMessage("An unexpected error occurred.");
+      setStatusVisible(true);
+    }
+  };
+
   const goToSlide = (index) => {
     scrollViewRef.current?.scrollTo({ x: index * screenWidth, animated: true });
     setCurrentSlide(index);
   };
 
+  const handleScroll = (event) => {
+    const scrollOffset = event.nativeEvent.contentOffset.x;
+    const index = Math.round(scrollOffset / screenWidth);
+    if (index !== currentSlide) {
+      setCurrentSlide(index);
+    }
+  };
+
+  const isLastSlide = currentSlide === carouselSlides.length;
+
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      <StatusBar
-        barStyle={
-          currentSlide === carouselSlides.length
-            ? "dark-content"
-            : "light-content"
-        }
-      />
+      <StatusBar barStyle={isLastSlide ? "dark-content" : "light-content"} />
 
-      {currentSlide < carouselSlides.length ? (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
         <ScrollView
           ref={scrollViewRef}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleScroll}
+          scrollEventThrottle={16}
           style={{ flex: 1 }}
         >
+          {/* CAROUSEL PAGES */}
           {carouselSlides.map((slide) => (
-            <CarouselSlide key={slide.id} slide={slide} />
+            <View key={slide.id} style={{ width: screenWidth }}>
+              <CarouselSlide slide={slide} />
+            </View>
           ))}
+
+          {/* LOGIN PAGE */}
+          <View style={{ width: screenWidth }}>
+            <LoginForm
+              email={email}
+              setEmail={setEmail}
+              password={password}
+              setPassword={setPassword}
+              handleLogin={handleLogin}
+              fetchHouseholdLeadsForDropdown={fetchDropdownAllLead}
+              isloading={isLoading} // Pinapasa ang isLoading state mula sa Context
+              DropdowndataLead={DropdowndataLead}
+              BarangaysDropdownData={isBarangaysDropdown}
+              slide={loginSlide}
+              signup={signup}
+              checkEmailAvailability={checkEmailAvailability}
+              navigation={navigation}
+              municipalities={municipalities}
+            />
+          </View>
         </ScrollView>
-      ) : (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1 }}
-        >
-          <LoginForm
-            email={email}
-            setEmail={setEmail}
-            password={password}
-            setPassword={setPassword}
-            handleLogin={handleLogin}
-            fetchHouseholdLeadsForDropdown={fetchDropdownAllLead}
-            isloading={loading}
-            DropdowndataLead={DropdowndataLead}
-            BarangaysDropdownData={isBarangaysDropdown}
-            slide={loginSlide}
-            signup={signup}
-            checkEmailAvailability={checkEmailAvailability}
-            navigation={navigation}
-            municipalities={municipalities}
+      </KeyboardAvoidingView>
+
+      {/* NAVIGATION CONTROLS */}
+      {!isLastSlide && (
+        <>
+          <DotIndicator
+            currentSlide={currentSlide}
+            totalSlides={carouselSlides.length + 1}
+            onDotPress={goToSlide}
           />
-        </KeyboardAvoidingView>
+          <NavigationButtons
+            currentSlide={currentSlide}
+            totalSlides={carouselSlides.length + 1}
+            onSkip={() => goToSlide(carouselSlides.length)}
+            onNext={() => goToSlide(currentSlide + 1)}
+          />
+        </>
       )}
 
+      {/* OVERLAYS & MODALS */}
+      {/* Gagamitin ang isLoading mula sa Context para ipakita ang overlay */}
       {isLoading && (
         <LoadingOverlay>
           <Text style={{ color: "#fff", fontSize: 16, marginTop: 10 }}>
@@ -190,27 +228,11 @@ export default function LoginPage({ navigation }) {
         </LoadingOverlay>
       )}
 
-      <DotIndicator
-        currentSlide={currentSlide}
-        totalSlides={carouselSlides.length + 1}
-        onDotPress={goToSlide}
-      />
-      <NavigationButtons
-        currentSlide={currentSlide}
-        totalSlides={carouselSlides.length + 1}
-        onSkip={() => goToSlide(carouselSlides.length)}
-        onNext={() => goToSlide(currentSlide + 1)}
-      />
       <StatusModal
         visible={statusVisible}
         type={statusType}
         message={statusMessage}
-        onClose={() => {
-          setStatusVisible(false);
-          if (statusType === "success") {
-            handleCloseModal();
-          }
-        }}
+        onClose={() => setStatusVisible(false)}
       />
     </View>
   );

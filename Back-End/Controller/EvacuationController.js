@@ -277,8 +277,14 @@ exports.DisplayNearbyEvacuations = async (req, res) => {
     const lat = parseFloat(latitude);
     const lng = parseFloat(longitude);
 
-    const limitedRoles = ["household_lead", "brgy_captain", "household_member"];
-    const isLimited = limitedRoles.includes(role);
+    // 🎯 Roles na dapat pinakamalapit lang ang makuha
+    const nearestOnlyRoles = [
+      "household_member",
+      "household_lead",
+      "brgy_captain",
+    ];
+
+    const isNearestOnly = nearestOnlyRoles.includes(role);
 
     // Base match
     let matchStage = {
@@ -286,14 +292,17 @@ exports.DisplayNearbyEvacuations = async (req, res) => {
       isActive: true,
     };
 
-    if (isLimited) {
-      matchStage.$expr = { $lt: ["$totalHouseholds", "$evacuationCapacity"] };
+    // 🔥 Kung limited role → dapat may available capacity
+    if (isNearestOnly) {
+      matchStage.$expr = {
+        $lt: ["$totalHouseholds", "$evacuationCapacity"],
+      };
     }
 
     const pipeline = [
       { $match: matchStage },
 
-      // Compute distance
+      // ✅ Compute distance (Haversine)
       {
         $addFields: {
           distance: {
@@ -320,7 +329,11 @@ exports.DisplayNearbyEvacuations = async (req, res) => {
                           $multiply: [
                             { $cos: "$$lat1Rad" },
                             { $cos: "$$lat2Rad" },
-                            { $cos: { $subtract: ["$$lon2Rad", "$$lon1Rad"] } },
+                            {
+                              $cos: {
+                                $subtract: ["$$lon2Rad", "$$lon1Rad"],
+                              },
+                            },
                           ],
                         },
                       ],
@@ -333,7 +346,7 @@ exports.DisplayNearbyEvacuations = async (req, res) => {
         },
       },
 
-      // 🔹 Lookup sa Tracking para sa total evacuees
+      // Lookup tracking (total evacuees)
       {
         $lookup: {
           from: "trackings",
@@ -356,13 +369,12 @@ exports.DisplayNearbyEvacuations = async (req, res) => {
         },
       },
 
-      // Sort nearest first
-      { $sort: { distance: 1, createdAt: -1 } },
+      // Sort by nearest
+      { $sort: { distance: 1 } },
 
-      // Limit for restricted roles
-      ...(isLimited ? [{ $limit: 1 }] : []),
+      // 🔥 IMPORTANT: If restricted role → get ONLY nearest
+      ...(isNearestOnly ? [{ $limit: 1 }] : []),
 
-      // Project fields
       {
         $project: {
           evacuationName: 1,
@@ -372,7 +384,7 @@ exports.DisplayNearbyEvacuations = async (req, res) => {
           contactPerson: 1,
           isActive: 1,
           distance: 1,
-          totalEvacuates: 1, // **idagdag dito**
+          totalEvacuates: 1,
         },
       },
     ];
@@ -384,6 +396,7 @@ exports.DisplayNearbyEvacuations = async (req, res) => {
       data: result,
       totalItems: result.length,
     });
+
   } catch (error) {
     console.error("DisplayNearbyEvacuations Error:", error);
     res.status(500).json({

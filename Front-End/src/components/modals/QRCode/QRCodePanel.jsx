@@ -30,8 +30,6 @@ const ExpandedQRModal = ({
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const flipAnimation = useRef(new Animated.Value(0)).current;
   const qrCodeRef = useRef();
-  console.log("userProfile",userProfile)
-
   const cardWidth = Math.min(windowWidth * 0.9, 400);
   const cardHeight = cardWidth * (2.125 / 3.375);
 

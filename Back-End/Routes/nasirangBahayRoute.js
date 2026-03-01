@@ -20,8 +20,8 @@ router
   .get(authController.protect, nasirangBahayController.getReports);
 
 router
-  .route("/getTyphoneName")
-  .get(authController.protect, nasirangBahayController.getyphoonName);
+  .route("/getSpecificUserUploads")
+  .get(authController.protect, nasirangBahayController.getSpecificUploads);
 
 router
   .route("/getTyphoneName")

@@ -7,7 +7,7 @@ const authController = require("./../Controller/authController");
 router
   .route("/")
   .post(authController.protect, municipalityController.createMunicipality)
-  .get(authController.protect, municipalityController.getMunicipalities);
+  .get(municipalityController.getMunicipalities);
 
 router
   .route("/:id")

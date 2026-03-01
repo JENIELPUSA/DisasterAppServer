@@ -274,7 +274,6 @@ exports.getReports = async (req, res) => {
 exports.getSpecificUploads = async (req, res) => {
   try {
     const userId = req.user.linkId;
-
     const reports = await NasirangBahayReport.find({
       submitted: userId,
     }).sort({ createdAt: -1 }); // mas ok kaysa timestamp
@@ -395,8 +394,7 @@ exports.DisplayAllNasirangBahay = async (req, res) => {
     const matchFilter = {};
 
     // 🔹 Specific Filters
-    if (typhoon)
-      matchFilter.typhoonName = { $regex: typhoon, $options: "i" };
+    if (typhoon) matchFilter.typhoonName = { $regex: typhoon, $options: "i" };
 
     if (municipality)
       matchFilter["municipality.municipalityName"] = {
@@ -404,8 +402,7 @@ exports.DisplayAllNasirangBahay = async (req, res) => {
         $options: "i",
       };
 
-    if (barangay)
-      matchFilter.barangay = { $regex: barangay, $options: "i" };
+    if (barangay) matchFilter.barangay = { $regex: barangay, $options: "i" };
 
     // 🔥 GLOBAL SEARCH
     if (search && search.trim() !== "") {
@@ -547,7 +544,7 @@ exports.DisplayAllNasirangBahay = async (req, res) => {
 
     const allMunicipalities = [
       ...new Set(
-        reports.map((r) => r.municipality?.municipalityName).filter(Boolean)
+        reports.map((r) => r.municipality?.municipalityName).filter(Boolean),
       ),
     ];
 
