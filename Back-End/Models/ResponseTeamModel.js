@@ -9,11 +9,11 @@ const ResponseTeamSchema = new mongoose.Schema({
   },
   teamLeader: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: "User" 
+    ref: "UserLoginSchema" 
   },
   members: [{ 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: "User" 
+    ref: "UserLoginSchema" 
   }],
   contactNumber: { type: String, required: true },
   specialization: [{ 

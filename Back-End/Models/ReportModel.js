@@ -15,7 +15,7 @@ const MediaSchema = new mongoose.Schema({
 const ReportSchema = new mongoose.Schema({
   reporter: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: "User", 
+    ref: "UserLoginSchema", 
     required: true 
   },
   barangay: { 

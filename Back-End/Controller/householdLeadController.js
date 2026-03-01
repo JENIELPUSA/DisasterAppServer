@@ -53,7 +53,7 @@ exports.getHouseholdWithMembers = async (req, res) => {
               $project: {
                 fullName: 1,
                 address: 1,
-                contactNumber: 1
+                contactNumber: 1,
               },
             },
           ],
@@ -289,14 +289,18 @@ exports.createHouseholdLead = async (req, res) => {
 exports.getHouseholdLeadsByBarangayId = async (req, res) => {
   try {
     const { barangayId } = req.params;
+
     if (!barangayId)
       return res
         .status(400)
         .json({ success: false, message: "barangayId is required" });
 
     const data = await HouseholdLead.aggregate([
-      { $match: { barangayId: barangayId } },
-      // Lookup household members
+      {
+        $match: {
+          barangayId: new mongoose.Types.ObjectId(barangayId),
+        },
+      },
       {
         $lookup: {
           from: "householdmembers",
@@ -305,10 +309,9 @@ exports.getHouseholdLeadsByBarangayId = async (req, res) => {
           as: "members",
         },
       },
-      // Lookup household creator from UserLoginSchema
       {
         $lookup: {
-          from: "userloginschemas", // 🔹 collection name derived from model
+          from: "userloginschemas",
           localField: "userId",
           foreignField: "_id",
           as: "user",
@@ -620,124 +623,179 @@ exports.DropdownAllHouseHold = async (req, res) => {
 // Get Household Leads for Dropdown including barangay + checkedIn info
 exports.getHouseholdLeadsSendNotification = AsyncErrorHandler(
   async (req, res, next) => {
-    const householdLeads = await HouseholdLead.aggregate([
-      {
-        $match: {
-          rescueStatus: { $ne: "none" }, // only active rescue households
-        },
-      },
+    try {
+      const role = req.user.role;
 
-      // Join lead user info
-      {
-        $lookup: {
-          from: "userloginschemas",
-          localField: "userId",
-          foreignField: "_id",
-          as: "user",
-        },
-      },
-      { $unwind: "$user" },
+      // 🔒 Restrict specific roles
+      const restrictedRoles = [
+        "household_lead",
+        "brgy_captain",
+        "household_member",
+      ];
 
-      // 🔹 Join barangay info
-      {
-        $lookup: {
-          from: "barangays",
-          localField: "barangayId",
-          foreignField: "_id",
-          as: "barangay",
-        },
-      },
-      { $unwind: { path: "$barangay", preserveNullAndEmptyArrays: true } },
+      if (restrictedRoles.includes(role)) {
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          data: [],
+        });
+      }
 
-      // 🔹 Join household members
-      {
-        $lookup: {
-          from: "householdmembers",
-          localField: "_id",
-          foreignField: "householdLeadId",
-          as: "members",
-        },
-      },
-
-      // 🔹 Combine lead + members userIds
-      {
-        $addFields: {
-          allUserIds: {
-            $concatArrays: [
-              ["$userId"], // lead
-              { $map: { input: "$members", as: "m", in: "$$m.userId" } },
-            ],
+      const householdLeads = await HouseholdLead.aggregate([
+        // 🔹 Join lead user info
+        {
+          $lookup: {
+            from: "userloginschemas",
+            localField: "userId",
+            foreignField: "_id",
+            as: "user",
           },
         },
-      },
+        { $unwind: "$user" },
 
-      // 🔹 Lookup Tracking for check-ins
-      {
-        $lookup: {
-          from: "trackings",
-          let: { userIds: "$allUserIds" },
-          pipeline: [
-            { $match: { scanType: "check_in" } },
-            { $match: { $expr: { $in: ["$userId", "$$userIds"] } } },
-          ],
-          as: "checkedInUsers",
-        },
-      },
-
-      // 🔹 Compute membersCheckedIn, totalMembers, and auto rescueStatus
-      {
-        $addFields: {
-          membersCheckedIn: { $size: "$checkedInUsers" },
-          totalMembers: { $add: [{ $size: "$members" }, 1] }, // kasama ang lead
-          checkedInPercentage: {
-            $multiply: [
-              {
-                $cond: [
-                  { $gt: [{ $add: [{ $size: "$members" }, 1] }, 0] },
-                  { $divide: [{ $size: "$checkedInUsers" }, { $add: [{ $size: "$members" }, 1] }] },
-                  0,
-                ],
-              },
-              100,
-            ],
+        // 🔹 Join barangay info
+        {
+          $lookup: {
+            from: "barangays",
+            localField: "barangayId",
+            foreignField: "_id",
+            as: "barangay",
           },
-          rescueStatus: {
-            $switch: {
-              branches: [
-                { case: { $eq: [{ $size: "$checkedInUsers" }, 0] }, then: "pending" },
-                { case: { $eq: [{ $size: "$checkedInUsers" }, { $add: [{ $size: "$members" }, 1] }] }, then: "rescued" },
+        },
+        { $unwind: { path: "$barangay", preserveNullAndEmptyArrays: true } },
+
+        // 🔹 Join household members
+        {
+          $lookup: {
+            from: "householdmembers",
+            localField: "_id",
+            foreignField: "householdLeadId",
+            as: "members",
+          },
+        },
+
+        // 🔹 Combine lead + members userIds
+        {
+          $addFields: {
+            allUserIds: {
+              $concatArrays: [
+                ["$userId"],
+                {
+                  $map: {
+                    input: "$members",
+                    as: "m",
+                    in: "$$m.userId",
+                  },
+                },
               ],
-              default: "in_progress",
             },
           },
         },
-      },
 
-      // 🔹 Project final fields for dropdown
-      {
-        $project: {
-          id: "$_id",
-          name: "$user.fullName",
-          email: "$user.email",
-          address: "$user.address",
-          contact: "$user.contactNumber",
-          barangayName: "$barangay.name",
-          membersCheckedIn: 1,
-          totalMembers: 1,
-          checkedInPercentage: 1,
-          householdCode: 1,
-          rescueStatus: 1,
-          location: 1,
-          isFull: 1,
+        // 🔹 Lookup Tracking for check-ins
+        {
+          $lookup: {
+            from: "trackings",
+            let: { userIds: "$allUserIds" },
+            pipeline: [
+              { $match: { scanType: "check_in" } },
+              {
+                $match: {
+                  $expr: { $in: ["$userId", "$$userIds"] },
+                },
+              },
+            ],
+            as: "checkedInUsers",
+          },
         },
-      },
-    ]);
 
-    res.status(200).json({
-      success: true,
-      count: householdLeads.length,
-      data: householdLeads,
-    });
+        // 🔹 Compute membersCheckedIn, totalMembers, percentage, rescueStatus
+        {
+          $addFields: {
+            membersCheckedIn: { $size: "$checkedInUsers" },
+            totalMembers: { $add: [{ $size: "$members" }, 1] },
+            checkedInPercentage: {
+              $multiply: [
+                {
+                  $cond: [
+                    { $gt: [{ $add: [{ $size: "$members" }, 1] }, 0] },
+                    {
+                      $divide: [
+                        { $size: "$checkedInUsers" },
+                        { $add: [{ $size: "$members" }, 1] },
+                      ],
+                    },
+                    0,
+                  ],
+                },
+                100,
+              ],
+            },
+            rescueStatus: {
+              $switch: {
+                branches: [
+                  {
+                    case: { $eq: [{ $size: "$checkedInUsers" }, 0] },
+                    then: "pending",
+                  },
+                  {
+                    case: {
+                      $eq: [
+                        { $size: "$checkedInUsers" },
+                        { $add: [{ $size: "$members" }, 1] },
+                      ],
+                    },
+                    then: "rescued",
+                  },
+                ],
+                default: "in_progress",
+              },
+            },
+          },
+        },
+
+        // 🔹 Filter AFTER computing rescueStatus
+        {
+          $match: {
+            rescueStatus: { $ne: "none" },
+          },
+        },
+
+        // 🔥 SORT by updatedAt (Latest first)
+        {
+          $sort: {
+            updatedAt: -1,
+          },
+        },
+
+        // 🔹 Final projection
+        {
+          $project: {
+            id: "$_id",
+            name: "$user.fullName",
+            email: "$user.email",
+            address: "$user.address",
+            contact: "$user.contactNumber",
+            barangayName: "$barangay.name",
+            membersCheckedIn: 1,
+            totalMembers: 1,
+            checkedInPercentage: 1,
+            householdCode: 1,
+            rescueStatus: 1,
+            location: 1,
+            isFull: 1,
+            updatedAt: 1,
+          },
+        },
+      ]);
+
+      res.status(200).json({
+        success: true,
+        count: householdLeads.length,
+        data: householdLeads,
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 );
-

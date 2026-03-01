@@ -10,11 +10,11 @@ import * as Location from "expo-location";
 
 export default function MapsScreen() {
   const { fetchNearbyEvacuations, nearEvacuations } = useContext(
-    EvacuationDisplayContext
+    EvacuationDisplayContext,
   );
 
   const { dropdownhousehold, displayDropdownInMaps } = useContext(
-    BarangayDisplayContext
+    BarangayDisplayContext,
   );
 
   const { fetchReports, reports } = useContext(IncidentReportContext);
@@ -25,6 +25,8 @@ export default function MapsScreen() {
   const [currentLocation, setCurrentLocation] = useState(null);
   const [selectedDestination, setSelectedDestination] = useState(null);
 
+  console.log("PinpoifrffntHousehold", PinpointHousehold);
+
   // 🔥 Runs EVERY TIME screen is focused
   useFocusEffect(
     useCallback(() => {
@@ -32,8 +34,7 @@ export default function MapsScreen() {
 
       const initialize = async () => {
         try {
-          const { status } =
-            await Location.requestForegroundPermissionsAsync();
+          const { status } = await Location.requestForegroundPermissionsAsync();
 
           if (status !== "granted") {
             console.log("❌ Permission denied");
@@ -54,7 +55,6 @@ export default function MapsScreen() {
             fetchNearbyEvacuations({ latitude, longitude }),
             fetchReports("", 1, ""),
           ]);
-
         } catch (error) {
           console.log("🚨 Initialization error:", error);
         }
@@ -66,7 +66,7 @@ export default function MapsScreen() {
       return () => {
         isActive = false;
       };
-    }, [])
+    }, []),
   );
 
   const handleSelectDestination = (coords) => {

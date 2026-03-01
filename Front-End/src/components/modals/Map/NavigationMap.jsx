@@ -73,6 +73,9 @@ const NavigationMap = ({
   const cameraRef = useRef(null);
   const barangayOverlayOpacity = useRef(new Animated.Value(0)).current;
 
+
+  console.log("PinpointHousehold",PinpointHousehold)
+
   // Ref para iwasan ang pag-override ng zoom habang nagfo-follow
   const initialFollowSet = useRef(false);
   // Throttle ref para sa camera updates

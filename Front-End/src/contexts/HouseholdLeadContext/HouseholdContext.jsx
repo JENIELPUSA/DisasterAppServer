@@ -321,6 +321,8 @@ export const HouseholdProvider = ({ children }) => {
         // Destructure like fetchEvacuation example
         const { data, count } = res.data;
 
+        console.log("data", data);
+
         setPinpointHousehold(data || []);
         setCurrentPage(page);
         setTotalPages(1); // Adjust if backend sends totalPages
@@ -367,7 +369,6 @@ export const HouseholdProvider = ({ children }) => {
         );
 
         const { data = [] } = res.data;
-
         setNotifyLeadRescue(data);
       } catch (error) {
         handleError(error);
@@ -407,7 +408,7 @@ export const HouseholdProvider = ({ children }) => {
         getHouseholdLeadsByBarangayId,
         PinpointHousehold,
         fetchHouseholdWithMembers,
-        householdWithMembers
+        householdWithMembers,
       }}
     >
       {children}

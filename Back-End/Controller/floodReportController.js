@@ -155,9 +155,6 @@ exports.createIncidentReport = async (req, res) => {
 
     await report.save();
 
-    // ----------------------------
-    // Socket.io emit: incident (municipality-specific)
-    // ----------------------------
     const io = req.app.get("io");
     for (const userId in global.connectedUsers) {
       const user = global.connectedUsers[userId];
@@ -165,10 +162,6 @@ exports.createIncidentReport = async (req, res) => {
         io.to(user.socketId).emit("incident:new", report);
       }
     }
-
-    // ----------------------------
-    // Create Notification
-    // ----------------------------
     let notifTitle = "";
     let notifMessage = "";
 

@@ -20,7 +20,6 @@ const NotificationPanel = ({
   Notification = [],
 }) => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
-
   // 1. Fetch data tuwing bubuksan ang panel
   useEffect(() => {
     if (notificationPanelVisible && typeof fetchNotification === "function") {
@@ -91,39 +90,39 @@ const NotificationPanel = ({
   const getRescueStatusStyles = (status) => {
     switch (status?.toLowerCase()) {
       case "rescued":
-        return { 
-            text: "RESCUED", 
-            bg: "bg-emerald-100", 
-            textColor: "text-emerald-700", 
-            icon: "checkmark-circle" 
+        return {
+          text: "RESCUED",
+          bg: "bg-emerald-100",
+          textColor: "text-emerald-700",
+          icon: "checkmark-circle",
         };
       case "in_progress":
-        return { 
-            text: "IN PROGRESS", 
-            bg: "bg-amber-100", 
-            textColor: "text-amber-700", 
-            icon: "time" 
+        return {
+          text: "IN PROGRESS",
+          bg: "bg-amber-100",
+          textColor: "text-amber-700",
+          icon: "time",
         };
       case "pending":
-        return { 
-            text: "PENDING", 
-            bg: "bg-blue-100", 
-            textColor: "text-blue-700", 
-            icon: "pause-circle" 
+        return {
+          text: "PENDING",
+          bg: "bg-blue-100",
+          textColor: "text-blue-700",
+          icon: "pause-circle",
         };
       case "cancelled":
-        return { 
-            text: "CANCELLED", 
-            bg: "bg-rose-100", 
-            textColor: "text-rose-700", 
-            icon: "close-circle" 
+        return {
+          text: "CANCELLED",
+          bg: "bg-rose-100",
+          textColor: "text-rose-700",
+          icon: "close-circle",
         };
       default:
-        return { 
-            text: "NONE", 
-            bg: "bg-slate-100", 
-            textColor: "text-slate-700", 
-            icon: "help-circle" 
+        return {
+          text: "NONE",
+          bg: "bg-slate-100",
+          textColor: "text-slate-700",
+          icon: "help-circle",
         };
     }
   };
@@ -140,7 +139,10 @@ const NotificationPanel = ({
         type: "rescue",
         title: `Household: ${household.householdName}`,
         message: household.address,
-        timestamp: household.rescuedAt || household.createdAt || new Date().toISOString(),
+        timestamp:
+          household.rescuedAt ||
+          household.createdAt ||
+          new Date().toISOString(),
         data: household,
         badgeText: statusStyle.text,
         badgeColor: statusStyle.bg,
@@ -167,22 +169,41 @@ const NotificationPanel = ({
       });
     });
 
-    return allNotifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    return allNotifications.sort(
+      (a, b) => new Date(b.timestamp) - new Date(a.timestamp),
+    );
   }, [rescuedHouseholdsData, Notification]);
 
   const SkeletonPulse = ({ style }) => (
-    <Animated.View style={[style, { opacity: pulseAnim, backgroundColor: "#e5e7eb" }]} />
+    <Animated.View
+      style={[style, { opacity: pulseAnim, backgroundColor: "#e5e7eb" }]}
+    />
   );
 
-  const renderSkeleton = () => [1, 2, 3].map((i) => (
-    <View key={`skel-${i}`} className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
-      <View className="flex-row items-center justify-between mb-3">
-        <SkeletonPulse style={{ width: "60%", height: 20, borderRadius: 4 }} />
-        <SkeletonPulse style={{ width: "20%", height: 24, borderRadius: 12 }} />
+  const renderSkeleton = () =>
+    [1, 2, 3].map((i) => (
+      <View
+        key={`skel-${i}`}
+        className="bg-white rounded-xl border border-gray-100 p-4 mb-4"
+      >
+        <View className="flex-row items-center justify-between mb-3">
+          <SkeletonPulse
+            style={{ width: "60%", height: 20, borderRadius: 4 }}
+          />
+          <SkeletonPulse
+            style={{ width: "20%", height: 24, borderRadius: 12 }}
+          />
+        </View>
+        <SkeletonPulse
+          style={{
+            width: "90%",
+            height: 16,
+            borderRadius: 4,
+            marginBottom: 12,
+          }}
+        />
       </View>
-      <SkeletonPulse style={{ width: "90%", height: 16, borderRadius: 4, marginBottom: 12 }} />
-    </View>
-  ));
+    ));
 
   const renderNotificationItem = (item) => {
     const isRescue = item.type === "rescue";
@@ -195,12 +216,15 @@ const NotificationPanel = ({
       >
         <View className="flex-row items-center justify-between mb-3">
           <View className="flex-row items-center flex-1">
-            <Ionicons 
-              name={isRescue ? item.statusIcon : "warning"} 
-              size={20} 
-              color={isRescue ? "#334155" : alertStyles.icon} 
+            <Ionicons
+              name={isRescue ? item.statusIcon : "warning"}
+              size={20}
+              color={isRescue ? "#334155" : alertStyles.icon}
             />
-            <Text className={`ml-2 font-bold flex-1 ${isRescue ? "text-slate-800" : alertStyles.text}`} numberOfLines={1}>
+            <Text
+              className={`ml-2 font-bold flex-1 ${isRescue ? "text-slate-800" : alertStyles.text}`}
+              numberOfLines={1}
+            >
               {item.title}
             </Text>
           </View>
@@ -218,7 +242,10 @@ const NotificationPanel = ({
         <View className="flex-row justify-between items-center">
           <Text className="text-slate-400 text-[11px]">
             {new Date(item.timestamp).toLocaleDateString("en-PH", {
-              month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
             })}
           </Text>
 
@@ -233,9 +260,16 @@ const NotificationPanel = ({
               </TouchableOpacity>
               <TouchableOpacity
                 className="bg-slate-100 rounded-lg px-3 py-2"
-                onPress={() => Alert.alert("Household Details", `Name: ${item.data.householdName}\nAddress: ${item.data.address}`)}
+                onPress={() =>
+                  Alert.alert(
+                    "Household Details",
+                    `Name: ${item.data.householdName}\nAddress: ${item.data.address}`,
+                  )
+                }
               >
-                <Text className="text-slate-700 text-xs font-medium">Details</Text>
+                <Text className="text-slate-700 text-xs font-medium">
+                  Details
+                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -262,11 +296,14 @@ const NotificationPanel = ({
       <View className="bg-cyan-800 px-6 pt-12 pb-6">
         <View className="flex-row items-center justify-between">
           <Text className="text-white text-2xl font-black">Notification</Text>
-          <TouchableOpacity onPress={closeNotificationPanel} className="bg-white/10 p-2 rounded-full">
+          <TouchableOpacity
+            onPress={closeNotificationPanel}
+            className="bg-white/10 p-2 rounded-full"
+          >
             <Ionicons name="close" size={24} color="white" />
           </TouchableOpacity>
         </View>
-        
+
         <View className="flex-row mt-4 space-x-2">
           <View className="bg-white/20 px-3 py-1 rounded-md">
             <Text className="text-white text-[10px] font-bold uppercase tracking-tighter">
@@ -276,17 +313,24 @@ const NotificationPanel = ({
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-4 py-4" showsVerticalScrollIndicator={false}>
-        {loading ? renderSkeleton() : combinedNotifications.map(renderNotificationItem)}
+      <ScrollView
+        className="flex-1 px-4 py-4"
+        showsVerticalScrollIndicator={false}
+      >
+        {loading
+          ? renderSkeleton()
+          : combinedNotifications.map(renderNotificationItem)}
       </ScrollView>
 
       <View className="p-4 bg-white border-t border-slate-200">
-        <TouchableOpacity 
+        <TouchableOpacity
           className="flex-row items-center justify-center py-3 bg-slate-100 rounded-xl"
           onPress={() => Alert.alert("Clear", "Feature coming soon.")}
         >
           <Ionicons name="trash-outline" size={18} color="#64748b" />
-          <Text className="ml-2 text-slate-600 font-bold">Clear Notifications</Text>
+          <Text className="ml-2 text-slate-600 font-bold">
+            Clear Notifications
+          </Text>
         </TouchableOpacity>
       </View>
     </Animated.View>

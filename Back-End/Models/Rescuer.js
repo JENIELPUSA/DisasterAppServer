@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const rescuerSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'UserLoginSchema',
     required: true,
     unique: true
   },

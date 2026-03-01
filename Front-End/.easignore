@@ -6,6 +6,7 @@ node_modules/
 .expo-shared/
 metro-cache/
 android/build/
+android/.gradle/
 ios/build/
 build/
 
@@ -26,3 +27,7 @@ config.env
 .git/
 .gitignore
 .gitattributes
+
+# Optional: ignore Android Gradle wrapper outputs
+android/.cxx/
+android/.externalNativeBuild/
